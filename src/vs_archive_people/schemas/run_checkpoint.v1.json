@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/run_checkpoint.v1.json",
+  "title": "Run checkpoint v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "schema_versions",
+    "input_file_hashes",
+    "completed_steps",
+    "output_file_hashes",
+    "processed_items",
+    "artifact_created_at",
+    "producer",
+    "logical_content_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "run-checkpoint-v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "artifact_created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "producer": {"$ref": "https://vs-archive.local/schemas/producer.v1.json"},
+    "logical_content_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "schema_versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_text_snapshot",
+        "identity_snapshot",
+        "evidence_package",
+        "resolution_report",
+        "identity_review_package",
+        "run_checkpoint",
+        "discovery_selection"
+      ],
+      "properties": {
+        "document_text_snapshot": {"const": "document-text-snapshot-v1"},
+        "identity_snapshot": {"const": "identity-snapshot-v1"},
+        "evidence_package": {"const": "evidence-package-v1"},
+        "resolution_report": {"const": "resolution-report-v1"},
+        "identity_review_package": {"const": "identity-review-package-v1"},
+        "run_checkpoint": {"const": "run-checkpoint-v1"},
+        "discovery_selection": {"const": "discovery-selection-v1"}
+      }
+    },
+    "input_file_hashes": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+    },
+    "completed_steps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["discover", "freeze-evidence", "resolve", "review"]}
+    },
+    "output_file_hashes": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+    },
+    "processed_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["archive_item_id", "displayed_text_sha256"],
+        "properties": {
+          "archive_item_id": {"type": "integer"},
+          "displayed_text_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+        }
+      }
+    }
+  }
+}

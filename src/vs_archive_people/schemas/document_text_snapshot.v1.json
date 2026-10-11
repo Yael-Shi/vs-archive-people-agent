@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/document_text_snapshot.v1.json",
+  "title": "Document text snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "exported_at", "items"],
+  "properties": {
+    "schema_version": {"const": "document-text-snapshot-v1"},
+    "exported_at": {"type": "string"},
+    "items": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/item"}
+    }
+  },
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["archive_item_id", "item_type"],
+      "properties": {
+        "archive_item_id": {"type": "integer"},
+        "item_type": {"enum": ["OCR_DOCUMENT", "MANUAL_TEXT"]},
+        "title": {"type": "string"},
+        "created_at": {"type": "string"},
+        "updated_at": {"type": "string"},
+        "ocr_document": {"type": "object"},
+        "manual_text": {"type": "object"}
+      }
+    }
+  }
+}

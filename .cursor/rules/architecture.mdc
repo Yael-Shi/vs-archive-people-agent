@@ -1,0 +1,24 @@
+---
+description: Architecture, artifact contracts, provenance, checkpoints, mention identity, resolution, and review-package boundaries
+alwaysApply: false
+---
+
+# Architecture changes
+
+Before a structural change, read:
+
+@docs/architecture.md
+@docs/contracts.md
+@docs/decision-log.md
+
+- `docs/architecture.md` is the current structure.
+- `docs/contracts.md` owns serialized artifact contracts and field semantics.
+- `docs/decision-log.md` records why important decisions exist.
+- Do not casually reverse an existing decision.
+- A meaningful new architectural decision updates `docs/decision-log.md`.
+- A change to current structure updates `docs/architecture.md`.
+- A change to artifact serialization updates the schema and `docs/contracts.md`.
+- A breaking artifact change requires a new schema version.
+- An unsupported historical artifact fails explicitly. Do not migrate it silently.
+- Do not copy contract field lists into the architecture doc.
+- If review shows a better foundational design, fix it before the first commit rather than documenting a known weakness.

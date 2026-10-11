@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/producer.v1.json",
+  "title": "Artifact producer v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version"],
+  "properties": {
+    "name": {"const": "vs-archive-people"},
+    "version": {"type": "string", "minLength": 1},
+    "git_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{40,64}$"
+    }
+  }
+}

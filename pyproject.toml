@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vs-archive-people"
+version = "0.1.0"
+description = "Read-only discovery, evidence, resolution, and identity review for VS Archive people."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "jsonschema==4.23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff==0.14.14",
+]
+
+[project.scripts]
+vs-archive-people = "vs_archive_people.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"vs_archive_people.schemas" = ["*.json"]
+
+[tool.ruff]
+target-version = "py312"
+exclude = [
+    ".venv/**",
+    "**/__pycache__/**",
+]
+
+[tool.ruff.format]
+# Default Ruff formatter, matching the VS Archive backend choice of no extra format rules.

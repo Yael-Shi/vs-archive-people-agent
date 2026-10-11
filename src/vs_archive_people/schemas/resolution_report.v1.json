@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/resolution_report.v1.json",
+  "title": "Resolution report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "evidence_package_logical_sha256",
+    "evidence_package_file_sha256",
+    "identity_snapshot_file_sha256",
+    "local_candidates_file_sha256",
+    "production_write_performed",
+    "confidence_approves_identity",
+    "local_candidates_are_production_identity",
+    "photo_person_created",
+    "resolutions",
+    "artifact_created_at",
+    "producer",
+    "logical_content_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "resolution-report-v1"},
+    "run_id": {"type": "string"},
+    "artifact_created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "producer": {"$ref": "https://vs-archive.local/schemas/producer.v1.json"},
+    "logical_content_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "evidence_package_logical_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "evidence_package_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "identity_snapshot_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "local_candidates_file_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "production_write_performed": {"const": false},
+    "confidence_approves_identity": {"const": false},
+    "local_candidates_are_production_identity": {"const": false},
+    "photo_person_rows_ignored": {"type": "integer", "minimum": 0},
+    "photo_person_created": {"const": false},
+    "resolutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mention_key",
+          "archive_item_id",
+          "exact_mention",
+          "evidence_source",
+          "source_text_sha256",
+          "evidence_snippet",
+          "start_offset",
+          "end_offset",
+          "occurrence_index",
+          "mention_fingerprint",
+          "classification",
+          "confidence_used_for_classification",
+          "review_status"
+        ],
+        "properties": {
+          "mention_key": {"type": "string"},
+          "archive_item_id": {"type": "integer"},
+          "exact_mention": {"type": "string"},
+          "evidence_source": {"type": "string", "minLength": 1},
+          "source_text_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "evidence_snippet": {"type": "string", "minLength": 1},
+          "start_offset": {"type": "integer", "minimum": 0},
+          "end_offset": {"type": "integer", "minimum": 0},
+          "occurrence_index": {"type": "integer", "minimum": 0},
+          "mention_fingerprint": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "classification": {
+            "enum": [
+              "DETERMINISTIC_EXISTING_PERSON",
+              "AMBIGUOUS",
+              "NEW_PERSON_CANDIDATE",
+              "NOT_A_PERSON"
+            ]
+          },
+          "matched_person_ids": {"type": "array", "items": {"type": "integer"}},
+          "matched_person_name": {"type": ["string", "null"]},
+          "matched_via": {"enum": ["canonical_name", "person_alias", null]},
+          "matched_alias_id": {"type": ["integer", "null"]},
+          "stable_keys": {"type": "array", "items": {"type": "string"}},
+          "confidence": {"type": ["integer", "null"]},
+          "confidence_used_for_classification": {"const": false},
+          "inferred_alias_proposal": {"type": "boolean"},
+          "proposed_identity_action": {
+            "enum": ["MERGE", "CANONICAL_NAME_CHANGE", null]
+          },
+          "local_candidate_overlap": {"type": "boolean"},
+          "review_status": {"const": "PENDING"},
+          "identity_is_production": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

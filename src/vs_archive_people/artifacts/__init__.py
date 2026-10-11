@@ -1,0 +1,1 @@
+"""Versioned JSON artifact IO."""

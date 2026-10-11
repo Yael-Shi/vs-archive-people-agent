@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/discovery_selection.v1.json",
+  "title": "Discovery selection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "document_snapshot_file_sha256",
+    "prior_checkpoint_logical_sha256",
+    "prior_checkpoint_file_sha256",
+    "selected_items",
+    "artifact_created_at",
+    "producer",
+    "logical_content_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "discovery-selection-v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "artifact_created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "producer": {"$ref": "https://vs-archive.local/schemas/producer.v1.json"},
+    "logical_content_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "document_snapshot_file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "prior_checkpoint_logical_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "prior_checkpoint_file_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "selected_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["archive_item_id", "displayed_text_sha256", "reason"],
+        "properties": {
+          "archive_item_id": {"type": "integer"},
+          "displayed_text_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{64}$"
+          },
+          "reason": {
+            "enum": ["not_previously_processed", "displayed_text_changed"]
+          }
+        }
+      }
+    }
+  }
+}

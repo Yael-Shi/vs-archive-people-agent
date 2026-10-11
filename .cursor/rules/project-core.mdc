@@ -1,0 +1,56 @@
+---
+description: Non-negotiable identity, boundary, review, and workflow rules for people-agent
+alwaysApply: true
+---
+
+# people-agent core
+
+## Repository identity
+
+- This is the standalone VS Archive `people-agent`.
+- Main application repository: `/home/yshif/vs-archive/vs-archive`.
+- Historical/legacy people-agent workspace: `/mnt/c/Users/User/vs-archive-people-agent`.
+- This repository is greenfield. Do not copy the historical pipeline wholesale.
+
+## Repository boundary
+
+- Do not import Django or main-repository application modules into this package.
+- Do not connect directly to the production database.
+- Do not access or mutate AWS/production infrastructure.
+- Do not infer production state from a local database.
+- Integration with `vs-archive` happens through explicit versioned artifacts.
+
+## Human-review boundary
+
+Human review remains mandatory for new Person creation, ambiguous identity, merge decisions, canonical-name changes, inferred aliases, biography decisions, and production writes.
+
+A deterministic production identity match may reduce review work. It is not itself a production write or apply operation.
+
+## Git/workflow
+
+- Never commit directly to `main`.
+- Every task starts on a dedicated branch.
+- Do not use `git add .`.
+- Do not commit or push unless the user explicitly asks.
+- Do not merge to `main` without the branch validation and review workflow.
+- Do not commit generated files or build metadata.
+
+## Execution policy
+
+- Do not mutate production, AWS, or provider state without explicit approval.
+- Do not run apply, deploy, or production commands without explicit approval.
+- Tests, Ruff, and formatter checks are quality gates before a branch is ready.
+- If the user reserves those commands, do not run them unless asked.
+
+## Engineering expectations
+
+- Prefer a principled architectural fix over a patch or workaround.
+- Preserve deterministic behavior.
+- Fail closed when a contract or lineage is invalid.
+- Do not silently reinterpret or upgrade a versioned artifact.
+- Do not change a versioned contract casually. A schema-breaking change needs an explicit new version.
+- Do not broaden task scope unnecessarily.
+
+@docs/architecture.md
+@docs/contracts.md
+@docs/decision-log.md

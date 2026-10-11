@@ -1,0 +1,31 @@
+---
+description: Python 3.12, local venv, Ruff, unittest, and fail-closed artifact checks
+globs: "**/*.py,tests/**/*.py,pyproject.toml"
+alwaysApply: false
+---
+
+# Python quality
+
+- Python minimum is `>=3.12`.
+- Use this repository's `.venv`. Never reuse the `vs-archive` virtual environment.
+- Ruff is `0.14.14`, the version declared in `pyproject.toml`.
+- Tests use `unittest`.
+- Deterministic ordering must be explicit.
+- Parsing and validation fail closed.
+- Avoid unnecessary dependencies. Prefer an established library over a custom reimplementation of a standard.
+- Do not commit generated build or install artifacts.
+- Schemas are runtime package resources and must load outside the repository working directory.
+- Tests should exercise contracts and invariants, not incidental wording.
+- Catch narrow exceptions. Do not hide programmer errors.
+- Prefer a small shared helper over duplicated validation.
+- A change to artifact semantics needs the matching contract and schema tests.
+
+Quality gates, when the user has asked for them:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m ruff check src tests
+.venv/bin/python -m ruff format --check src tests
+```
+
+If the user has reserved execution of validation commands for themselves, do not run them automatically.

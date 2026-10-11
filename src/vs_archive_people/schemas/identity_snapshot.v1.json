@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/identity_snapshot.v1.json",
+  "title": "Production identity snapshot v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "models"],
+  "properties": {
+    "schema_version": {"const": "identity-snapshot-v1"},
+    "generated_at": {"type": "string"},
+    "payload_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "source": {
+      "type": "object",
+      "properties": {
+        "read_only_enforced": {"type": "boolean"}
+      }
+    },
+    "models": {
+      "type": "object",
+      "required": ["Person", "PersonAlias", "PersonRegistryImportBinding"],
+      "properties": {
+        "Person": {"$ref": "#/$defs/personModel"},
+        "PersonAlias": {"$ref": "#/$defs/aliasModel"},
+        "PersonRegistryImportBinding": {"$ref": "#/$defs/bindingModel"},
+        "ArchiveItemPerson": {"$ref": "#/$defs/ignoredModel"},
+        "PhotoPerson": {"$ref": "#/$defs/ignoredModel"}
+      }
+    }
+  },
+  "$defs": {
+    "personModel": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["rows"],
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "name"],
+            "properties": {
+              "id": {"type": "integer"},
+              "name": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "aliasModel": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["rows"],
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "person_id", "name"],
+            "properties": {
+              "id": {"type": "integer"},
+              "person_id": {"type": "integer"},
+              "name": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "bindingModel": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["rows"],
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["person_id", "stable_key"],
+            "properties": {
+              "person_id": {"type": "integer"},
+              "stable_key": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "ignoredModel": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["rows"],
+      "properties": {
+        "rows": {"type": "array", "items": {"type": "object"}}
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "document-text-snapshot-v1",
+  "exported_at": "2026-01-01T00:00:00+00:00",
+  "items": [
+    {
+      "archive_item_id": 10,
+      "item_type": "OCR_DOCUMENT",
+      "title": "Metadata title must not be evidence",
+      "updated_at": "2020-01-01T00:00:00+00:00",
+      "ocr_document": {
+        "displayed_transcription": {"text": "Ada Lovelace wrote the note."},
+        "displayed_source_text": {"text": "Ada Lovelace wrote the note."},
+        "displayed_hebrew_translation": {"text": "עדה לאבלייס כתבה את ההערה."}
+      }
+    },
+    {
+      "archive_item_id": 11,
+      "item_type": "MANUAL_TEXT",
+      "title": "Manual metadata",
+      "updated_at": "2024-05-01T00:00:00+00:00",
+      "manual_text": {"body": "Grace Hopper served in the navy."}
+    }
+  ]
+}

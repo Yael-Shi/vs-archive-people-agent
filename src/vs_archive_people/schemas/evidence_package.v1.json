@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/evidence_package.v1.json",
+  "title": "Evidence package v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "document_snapshot_file_sha256",
+    "discovery_logical_sha256",
+    "discovery_file_sha256",
+    "mention_proposals_file_sha256",
+    "production_write_performed",
+    "items",
+    "mentions",
+    "artifact_created_at",
+    "producer",
+    "logical_content_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "evidence-package-v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "artifact_created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "producer": {"$ref": "https://vs-archive.local/schemas/producer.v1.json"},
+    "logical_content_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "document_snapshot_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "discovery_logical_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "discovery_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "mention_proposals_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "production_write_performed": {"const": false},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["archive_item_id", "item_type", "displayed_text_sha256", "output_metadata_only", "texts"],
+        "properties": {
+          "archive_item_id": {"type": "integer"},
+          "item_type": {"enum": ["OCR_DOCUMENT", "MANUAL_TEXT"]},
+          "displayed_text_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "output_metadata_only": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title"],
+            "properties": {"title": {"type": "string"}}
+          },
+          "texts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["text_role", "text_roles", "text", "text_sha256"],
+              "properties": {
+                "text_role": {"type": "string", "minLength": 1},
+                "text_roles": {
+                  "type": "array",
+                  "items": {"type": "string", "minLength": 1}
+                },
+                "text": {"type": "string", "minLength": 1},
+                "text_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "mentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mention_key",
+          "archive_item_id",
+          "text_role",
+          "evidence_source",
+          "source_text_sha256",
+          "exact_mention",
+          "evidence_snippet",
+          "start_offset",
+          "end_offset",
+          "occurrence_index",
+          "mention_fingerprint",
+          "mention_class",
+          "review_status"
+        ],
+        "properties": {
+          "mention_key": {"type": "string", "pattern": "^M[0-9]{4,}$"},
+          "archive_item_id": {"type": "integer"},
+          "text_role": {"type": "string"},
+          "evidence_source": {"type": "string"},
+          "source_text_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "exact_mention": {"type": "string"},
+          "evidence_snippet": {"type": "string"},
+          "start_offset": {"type": "integer", "minimum": 0},
+          "end_offset": {"type": "integer", "minimum": 0},
+          "occurrence_index": {"type": "integer", "minimum": 0},
+          "mention_fingerprint": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "mention_class": {"enum": ["PERSON", "NOT_A_PERSON"]},
+          "propose_alias": {"type": "boolean"},
+          "proposed_identity_action": {
+            "enum": ["MERGE", "CANONICAL_NAME_CHANGE", null]
+          },
+          "confidence": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
+          "review_status": {"const": "PENDING"}
+        }
+      }
+    }
+  }
+}

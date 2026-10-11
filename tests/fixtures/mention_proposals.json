@@ -1,0 +1,22 @@
+{
+  "mentions": [
+    {
+      "archive_item_id": 11,
+      "evidence_source": "manual_text.body",
+      "start_offset": 0,
+      "end_offset": 12,
+      "exact_mention": "Grace Hopper",
+      "evidence_snippet": "Grace Hopper served"
+    },
+    {
+      "archive_item_id": 10,
+      "evidence_source": "ocr_document.displayed_transcription.text",
+      "start_offset": 0,
+      "end_offset": 12,
+      "exact_mention": "Ada Lovelace",
+      "evidence_snippet": "Ada Lovelace wrote",
+      "mention_key": "B15-M0001",
+      "occurrence_index": 7
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": "identity-snapshot-v1",
+  "generated_at": "2026-01-01T00:00:00+00:00",
+  "source": {"kind": "fixture", "read_only_enforced": true},
+  "models": {
+    "Person": {
+      "rows": [
+        {"id": 1, "name": "Ada Lovelace", "honorific": "", "biography": "Do not copy this biography."},
+        {"id": 2, "name": "Grace Hopper", "honorific": "", "biography": ""},
+        {"id": 3, "name": "Dana Cohen", "honorific": "", "biography": ""},
+        {"id": 4, "name": "Dana Levi", "honorific": "", "biography": ""},
+        {"id": 5, "name": "Pending Person", "honorific": "", "biography": "pending bio", "review_status": "PENDING"}
+      ]
+    },
+    "PersonAlias": {
+      "rows": [
+        {"id": 10, "person_id": 1, "name": "Augusta King", "kind": "birth_name"},
+        {"id": 11, "person_id": 3, "name": "Dana", "kind": "partial_name"},
+        {"id": 12, "person_id": 4, "name": "Dana", "kind": "partial_name"}
+      ]
+    },
+    "PersonRegistryImportBinding": {
+      "rows": [
+        {"id": 21, "person_id": 1, "source": "fixture", "stable_key": "C:1"},
+        {"id": 22, "person_id": 2, "source": "fixture", "stable_key": "C:2"}
+      ]
+    },
+    "ArchiveItemPerson": {
+      "rows": [
+        {"id": 31, "archive_item_id": 10, "person_id": 1}
+      ]
+    },
+    "PhotoPerson": {
+      "rows": [
+        {"id": 41, "photo_content_id": 9, "person_id": 1}
+      ]
+    }
+  }
+}
