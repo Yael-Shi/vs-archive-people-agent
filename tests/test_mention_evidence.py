@@ -215,5 +215,13 @@ class MentionEvidenceTests(unittest.TestCase):
         self.assertEqual(from_pretty["mention_proposals_file_sha256"], pretty_hash)
 
 
+class NormalizeWhitespaceTests(unittest.TestCase):
+    def test_normalizes_empty_and_unicode_whitespace(self):
+        from vs_archive_people.evidence.mentions import normalize_ws
+
+        self.assertEqual(normalize_ws(None), "")
+        self.assertEqual(normalize_ws("\u00a0Ada\tLovelace\n"), "Ada Lovelace")
+
+
 if __name__ == "__main__":
     unittest.main()
