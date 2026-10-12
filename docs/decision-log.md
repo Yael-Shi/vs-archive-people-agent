@@ -511,3 +511,60 @@ Those files change what the command publishes, but they are not generated artifa
 ### Consequences
 
 Reformatting a proposal file without changing the frozen mentions changes only the audit hash. The resolution builder requires the local-candidate list and its file hash to be absent together or present together. An empty list still requires the hash. `local_candidates_are_production_identity` stays false.
+
+## ADR-031 — Gemini mention detection stays an isolated pilot
+
+- Date: 2026-10-11
+- Status: Accepted
+
+### Decision
+
+Person-name surface detection with Gemini 3.8 Flash is an experimental pilot (`pilot-find-mentions`). It is outside `RUN_STEPS`. It does not publish `mention-proposals-v1` or any other versioned artifact. Gemini may propose a surface inside a segment. Local code computes and checks source offsets. Gemini does not assign a production `person_id`, choose a canonical identity, create an alias, suggest a merge, or approve a Person.
+
+### Rationale
+
+Recall of name-like spans in real archive text is still unmeasured. Wiring that experiment into discovery, evidence, or resolution would treat an unreviewed model output as pipeline evidence.
+
+### Consequences
+
+The pilot reads a document-text snapshot and an identity snapshot, calls Gemini only for surface proposals, and writes `kind: GEMINI_MENTION_PILOT_NOT_ARTIFACT`. A known-name pass is local and exact. It also does not assign identity. See `docs/gemini-mention-pilot.md`.
+
+## ADR-032 — Mention-pilot surfaces stay exact and non-official
+
+- Date: 2026-10-12
+- Status: Accepted
+
+### Decision
+
+The Gemini mention pilot remains outside `RUN_STEPS` and still does not publish `mention-proposals-v1`. After the first 10-item corpus run, local checks reduce specific false positives without treating the pilot as evidence.
+
+A title or role with no name is not a person candidate. A title plus a name is one mention. The result may store the exact full slice, the exact name slice, and the exact title slice. Offsets refer to the original body. A split that is not an exact unique substring is not invented; the full slice remains the name.
+
+A span that only continues `רחוב`, and a span marked `NON_PERSON`, is not a person candidate. The same string can still be a candidate in another occurrence. Known-name search does not override that. Hebrew core names are stored only when the proposed remainder is an exact substring behind a safe attached proclitic. Two adjacent segments may form one span when the gap is a single newline, and that newline stays in the slice.
+
+### Rationale
+
+The corpus run kept real partial, OCR, and multilingual names, and it also returned title-only roles, street occurrences of person strings, prefixed forms, and names split by a line break. Promoting those outputs into the official pipeline would freeze the false positives. Dropping every difficult span would lose the recall the pilot is measuring.
+
+### Consequences
+
+`pilot-find-mentions` can be rerun on the same document-text snapshot, the same identity snapshot, and the same evidence source. The prompt and the local filters changed, so the JSON result can change. The pilot kind stays `GEMINI_MENTION_PILOT_NOT_ARTIFACT`. See `docs/gemini-mention-pilot.md`.
+
+ADR-033 supersedes one sentence in the decision above: an invalid title split does not leave the full slice as the name. A missing or invalid `TITLE_AND_NAME` split is `TITLE_SPLIT_UNRESOLVED` and is not published as a name. The rest of this decision stands.
+
+## ADR-033 — Title splits are exact Gemini slices, not a vocabulary
+
+- Date: 2026-10-12
+- Status: Accepted
+
+### Decision
+
+VS Archive stores a title as free text on `Person.honorific`. There is no title vocabulary and no parser. The mention pilot does not add one. For `TITLE_AND_NAME`, Gemini must supply the exact full surface, the exact title slice, and the exact name slice. Local code checks those slices against the original body. A missing or invalid split is `TITLE_SPLIT_UNRESOLVED` and is not published as a name.
+
+### Rationale
+
+A copied honorific-prefix list would reject real archive titles such as `אלוף`, `שר הבטחון`, and `השגריר האמריקאי`, and it would pretend the main app has a title catalog. The catalog does not exist.
+
+### Consequences
+
+The pilot still assigns no `person_id`. Attached forms such as `והאלוף` stay exact. See `docs/gemini-mention-pilot.md`.

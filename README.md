@@ -65,7 +65,9 @@ python -m vs_archive_people.cli checkpoint \
 
 `--prior-checkpoint` is optional. A later checkpoint of the same run is a new file. It takes `--prior` and continues only in the order `discover -> freeze-evidence -> resolve -> review`. Every input hash already recorded for the run must be supplied again and must match. Existing output paths are refused.
 
-`freeze-evidence` does not find person names. It validates mention proposals and publishes the evidence package. Mention finding is a separate future component. It will read the document-text snapshot and the discovery selection, and it will write proposal records. This repository does not implement that component.
+`freeze-evidence` does not find person names. It validates mention proposals and publishes the evidence package. Mention finding that emits proposal records for the pipeline is a separate future component. This repository does not implement that component.
+
+`pilot-find-mentions` is an experimental Gemini surface detector for one displayed body. It is not that component, not a checkpoint step, and not a versioned artifact. See `docs/gemini-mention-pilot.md`.
 
 Mention proposals are a JSON list, or an object with a `mentions` array. Each proposal needs `archive_item_id`, `evidence_source`, `start_offset`, `end_offset`, `exact_mention`, and `evidence_snippet`. Offsets are zero-based indexes into that displayed body, and the slice must equal `exact_mention`. Optional fields: `mention_class` (`PERSON` or `NOT_A_PERSON`), `propose_alias`, `proposed_identity_action` (`MERGE` or `CANONICAL_NAME_CHANGE`), and `confidence` (0–100). `mention_key`, `mention_fingerprint`, and `occurrence_index` are assigned when the evidence is frozen. A caller-supplied key, fingerprint, or occurrence index is discarded.
 

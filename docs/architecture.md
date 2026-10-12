@@ -93,7 +93,7 @@ Individual validation sentences are not part of this summary.
 
 ## Current non-goals
 
-- mention or person-name finding
+- official mention or person-name finding. An isolated Gemini mention pilot can propose surface spans for one displayed body. It is not a pipeline step and not a versioned artifact. See `docs/gemini-mention-pilot.md`.
 - historical or internet research
 - biographies
 - tagging
@@ -102,4 +102,4 @@ Individual validation sentences are not part of this summary.
 
 ## Future extension points
 
-Not implemented: a mention finder that emits proposals, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package.
+Not implemented: a mention finder that emits `mention-proposals-v1`, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. The Gemini mention pilot does not fill that gap.
