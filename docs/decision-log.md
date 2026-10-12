@@ -102,7 +102,7 @@ Finding names and freezing evidence are different responsibilities.
 
 ### Consequences
 
-A future finder emits proposals. This slice does not implement it.
+A future finder emits proposals. This slice does not implement automated finding. ADR-034 adds the generated `mention-proposals-v1` artifact and the human packager. `freeze-evidence` still consumes the loose proposal list.
 
 ## ADR-007 — Title is metadata
 
@@ -568,3 +568,26 @@ A copied honorific-prefix list would reject real archive titles such as `אלו�
 ### Consequences
 
 The pilot still assigns no `person_id`. Attached forms such as `והאלוף` stay exact. See `docs/gemini-mention-pilot.md`.
+
+## ADR-034 — mention-proposals-v1 is geometry, packaged by a human command
+
+- Date: 2026-10-12
+- Status: Accepted
+
+### Decision
+
+`mention-proposals-v1` is a generated artifact for person-name geometry. `package-mention-proposals` is its human producer. The command reads a document-text snapshot, a discovery selection, and a plain geometry file of offsets plus an optional `surface_kind`. It derives `exact_mention`, `name_surface`, `title_surface`, and `evidence_snippet` from the unmodified displayed body, stamps provenance and the logical hash, and publishes with the existing atomic no-clobber writer.
+
+The human file records one detector, `{id: "human-authored", role: "human", implementation: "manual", version: "1"}`, sets every mention `detector_ids` to that id, and sets `known_name_match_quality` to null. `identity_snapshot_file_sha256` is null. `production_write_performed` is false.
+
+The artifact has no diagnostics field and no identity fields: no `person_id`, `mention_key`, `mention_fingerprint`, `occurrence_index`, `mention_class`, `propose_alias`, `proposed_identity_action`, or `confidence`. Titles are free text. There is no title vocabulary. Detector `role` is a non-empty string, not a closed schema enum.
+
+`RUN_STEPS` stays `discover -> freeze-evidence -> resolve -> review`. v1 freeze, resolution, review, and `run-checkpoint-v1` stay on the loose proposal list. This phase does not implement automated `find-mentions`, the diagnostics sidecar, or v2 evidence, resolution, review, or checkpoint artifacts.
+
+### Rationale
+
+Detection and evidence freezing are different responsibilities (ADR-006). A human still needs a stamped proposal file whose slices are copied from source text rather than typed by hand. Publishing that file does not require a model call, and it must not change the in-flight v1 pipeline.
+
+### Consequences
+
+`package-mention-proposals` is outside `RUN_STEPS` and does not call a provider. Published mention rows are ordered by archive item, evidence source, and outer offsets before the logical hash is stamped. Artifact validation rejects a duplicate outer span, more than one line break in an outer span, and a `surface_kind` that disagrees with the title slice. `freeze-evidence` does not accept `mention-proposals-v1`. Automated finding remains unimplemented. The pilot command and `GEMINI_MENTION_PILOT_NOT_ARTIFACT` are unchanged.

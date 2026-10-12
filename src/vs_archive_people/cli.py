@@ -1,7 +1,8 @@
 """Command line for the read-only people slice.
 
 Pipeline commands: discover, freeze-evidence, resolve, review-package, checkpoint.
-``pilot-find-mentions`` is experimental and is not one of those steps.
+``package-mention-proposals`` publishes mention-proposals-v1 from human geometry.
+``pilot-find-mentions`` is experimental. Neither command is a pipeline step.
 Each output path is published atomically and is refused when it already exists.
 """
 
@@ -31,6 +32,7 @@ from vs_archive_people.resolution.match import build_resolution_report
 from vs_archive_people.resolution.snapshot_index import build_index
 from vs_archive_people.artifacts.schema_validate import step_chain
 from vs_archive_people.mention_pilot.gemini import GeminiMentionDetector
+from vs_archive_people.mention_proposals.package import package_mention_proposals
 from vs_archive_people.mention_pilot.run import (
     displayed_body_for_item,
     run_mention_pilot,
@@ -175,6 +177,30 @@ def command_pilot_find_mentions(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_package_mention_proposals(args: argparse.Namespace) -> int:
+    """Publish mention-proposals-v1 from offsets. Does not call a provider."""
+    snapshot = read_json(args.documents)
+    discovery = read_json(args.discovery)
+    packaged = package_mention_proposals(
+        snapshot,
+        discovery,
+        read_json(args.geometry),
+        run_id=args.run_id,
+        document_snapshot_file_sha256=sha256_file(args.documents),
+        discovery_file_sha256=sha256_file(args.discovery),
+    )
+    digest = write_json_atomic(args.output, packaged)
+    _ok(
+        {
+            "output_sha256": digest,
+            "logical_content_sha256": packaged["logical_content_sha256"],
+            "schema_version": packaged["schema_version"],
+            "mention_count": len(packaged["mentions"]),
+        }
+    )
+    return 0
+
+
 def command_checkpoint(args: argparse.Namespace) -> int:
     inputs = _bindings(args.input or [])
     outputs = _bindings(args.record or [])
@@ -261,6 +287,20 @@ def build_parser() -> argparse.ArgumentParser:
     pilot.add_argument("--identity", type=Path, required=True)
     pilot.add_argument("--output", type=Path, required=True)
     pilot.set_defaults(func=command_pilot_find_mentions)
+
+    package = commands.add_parser(
+        "package-mention-proposals",
+        help=(
+            "Publish mention-proposals-v1 from human mention geometry. "
+            "Not a pipeline step and not a provider call."
+        ),
+    )
+    package.add_argument("--documents", type=Path, required=True)
+    package.add_argument("--discovery", type=Path, required=True)
+    package.add_argument("--geometry", type=Path, required=True)
+    package.add_argument("--run-id", required=True)
+    package.add_argument("--output", type=Path, required=True)
+    package.set_defaults(func=command_package_mention_proposals)
 
     checkpoint = commands.add_parser("checkpoint")
     checkpoint.add_argument("--run-id", required=True)

@@ -24,6 +24,7 @@ SCHEMA_FILES = {
     "resolution-report-v1": "resolution_report.v1.json",
     "identity-review-package-v1": "identity_review_package.v1.json",
     "run-checkpoint-v1": "run_checkpoint.v1.json",
+    "mention-proposals-v1": "mention_proposals.v1.json",
 }
 
 # This constant owns checkpoint progression. The JSON Schema enum only
@@ -186,10 +187,15 @@ def validate_artifact(document: dict) -> None:
     schema = load_schema(version)
     validator = Draft202012Validator(schema, registry=_registry())
     errors = sorted(validator.iter_errors(document), key=lambda item: item.json_path)
-    if not errors:
-        return
-    first: ValidationError = errors[0]
-    raise ArtifactError(f"{first.json_path}: {first.message}")
+    if errors:
+        first: ValidationError = errors[0]
+        raise ArtifactError(f"{first.json_path}: {first.message}")
+    if version == "mention-proposals-v1":
+        from vs_archive_people.mention_proposals.constraints import (
+            require_mention_proposal_constraints,
+        )
+
+        require_mention_proposal_constraints(document)
 
 
 def iter_schema_documents() -> list[tuple[str, dict[str, Any]]]:

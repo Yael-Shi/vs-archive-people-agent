@@ -36,6 +36,7 @@ External snapshots, produced outside this package:
 Generated artifacts, produced and stamped here:
 
 - discovery selection
+- mention proposals (`mention-proposals-v1`)
 - evidence package
 - resolution report
 - identity-review package
@@ -49,7 +50,11 @@ A title is metadata, not evidence. Eligible bodies are the displayed OCR transcr
 
 ## Mention proposals and freeze-evidence
 
-This slice does not find person names. A proposal file, from a future finder or a fixture, supplies mentions. `freeze-evidence` checks those proposals against the displayed body and publishes an immutable evidence package. It does not discover names, assign production identity, or write production data.
+`freeze-evidence` does not find person names. The v1 command still reads a loose proposal list, or an object with a `mentions` array, and checks those proposals against the displayed body. It publishes an immutable evidence package. It does not discover names, assign production identity, or write production data.
+
+`mention-proposals-v1` is a separate generated artifact. `package-mention-proposals` publishes it from human geometry: offsets and an optional `surface_kind`. The command derives `exact_mention`, `name_surface`, `title_surface`, and `evidence_snippet` from the displayed body, then orders mentions by archive item, evidence source, and outer offsets before stamping. It inserts the `human-authored` detector, leaves `identity_snapshot_file_sha256` null, and does not call a provider. Automated `find-mentions` is not implemented. `freeze-evidence` does not read `mention-proposals-v1`. Artifact validation rejects a duplicate outer span, an outer span with more than one line break, and a `surface_kind` that contradicts the title slice.
+
+v1 evidence, resolution, review, and `run-checkpoint-v1` are unchanged. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`.
 
 ## Mention identity
 
@@ -93,7 +98,7 @@ Individual validation sentences are not part of this summary.
 
 ## Current non-goals
 
-- official mention or person-name finding. An isolated Gemini mention pilot can propose surface spans for one displayed body. It is not a pipeline step and not a versioned artifact. See `docs/gemini-mention-pilot.md`.
+- automated mention finding. `package-mention-proposals` publishes `mention-proposals-v1` from human geometry. It is outside `RUN_STEPS`. An isolated Gemini mention pilot can propose surface spans for one displayed body. The pilot is not a pipeline step and not a versioned artifact. See `docs/gemini-mention-pilot.md`. Automated `find-mentions` is not implemented.
 - historical or internet research
 - biographies
 - tagging
@@ -102,4 +107,4 @@ Individual validation sentences are not part of this summary.
 
 ## Future extension points
 
-Not implemented: a mention finder that emits `mention-proposals-v1`, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. The Gemini mention pilot does not fill that gap.
+Not implemented: automated `find-mentions`, the mention-proposal diagnostics sidecar, evidence-package-v2, resolution-report-v2, identity-review-package-v2, run-checkpoint-v2, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. The Gemini mention pilot does not fill that gap. `package-mention-proposals` publishes `mention-proposals-v1` only.
