@@ -49,6 +49,9 @@ class IdentityIndex:
     photo_person_rows_ignored: int = 0
     pending_rows_excluded: int = 0
     archive_item_person_rows_ignored: int = 0
+    # Original accepted Person.name and PersonAlias.name strings, first-seen
+    # order. Not normalized. Not an identity assignment.
+    exact_names: list[str] = field(default_factory=list)
     _alias_ids: dict[tuple[int, str], int] = field(default_factory=dict)
 
     def lookup(self, exact_mention: str) -> list[tuple[int, str]]:
@@ -110,6 +113,13 @@ def build_index(snapshot: dict) -> IdentityIndex:
     index = IdentityIndex(people={}, names={})
     pending_person_ids: set[int] = set()
     seen_person_ids: set[int] = set()
+    seen_exact_names: set[str] = set()
+
+    def remember_exact(name: str) -> None:
+        if name not in seen_exact_names:
+            seen_exact_names.add(name)
+            index.exact_names.append(name)
+
     for row in _rows(document, "Person"):
         person_id = _person_id(row, "Person")
         if person_id in seen_person_ids:
@@ -127,6 +137,7 @@ def build_index(snapshot: dict) -> IdentityIndex:
         )
         index.names.setdefault(key, {})
         index.names[key][person_id] = "canonical_name"
+        remember_exact(name)
 
     known_ids = set(index.people)
     seen_alias_ids: set[int] = set()
@@ -153,6 +164,7 @@ def build_index(snapshot: dict) -> IdentityIndex:
                 f"Person {person_id} has conflicting alias ids for one normalized name"
             )
         index._alias_ids[(person_id, key)] = alias_id
+        remember_exact(_alias_name)
         current = index.names.setdefault(key, {})
         # A canonical hit stays canonical. The alias id is still stored.
         # The same normalized alias on another person stays a second hit.

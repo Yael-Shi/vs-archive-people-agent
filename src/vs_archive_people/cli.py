@@ -1,6 +1,7 @@
 """Command line for the read-only people slice.
 
-Commands: discover, freeze-evidence, resolve, review-package, checkpoint.
+Pipeline commands: discover, freeze-evidence, resolve, review-package, checkpoint.
+``pilot-find-mentions`` is experimental and is not one of those steps.
 Each output path is published atomically and is refused when it already exists.
 """
 
@@ -29,6 +30,11 @@ from vs_archive_people.identity_review.package import build_review_package
 from vs_archive_people.resolution.match import build_resolution_report
 from vs_archive_people.resolution.snapshot_index import build_index
 from vs_archive_people.artifacts.schema_validate import step_chain
+from vs_archive_people.mention_pilot.gemini import GeminiMentionDetector
+from vs_archive_people.mention_pilot.run import (
+    displayed_body_for_item,
+    run_mention_pilot,
+)
 from vs_archive_people.runs.checkpoint import (
     append_step,
     initial_checkpoint,
@@ -139,6 +145,36 @@ def command_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_pilot_find_mentions(args: argparse.Namespace) -> int:
+    """Experimental one-body pilot. Does not publish a versioned artifact."""
+    snapshot = read_json(args.documents)
+    identity = read_json(args.identity)
+    selected = displayed_body_for_item(
+        snapshot,
+        args.archive_item_id,
+        args.evidence_source,
+    )
+    result = run_mention_pilot(
+        body_text=selected["text"],
+        archive_item_id=args.archive_item_id,
+        evidence_source=selected["evidence_source"],
+        text_roles=selected["text_roles"],
+        identity_snapshot=identity,
+        detector=GeminiMentionDetector(),
+    )
+    digest = write_json_atomic(args.output, result)
+    _ok(
+        {
+            "output_sha256": digest,
+            "kind": result["kind"],
+            "candidates": len(result["candidates"]),
+            "unaligned_gemini_candidates": len(result["unaligned_gemini_candidates"]),
+            "provider_calls": len(result["provider_calls"]),
+        }
+    )
+    return 0
+
+
 def command_checkpoint(args: argparse.Namespace) -> int:
     inputs = _bindings(args.input or [])
     outputs = _bindings(args.record or [])
@@ -211,6 +247,20 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--resolution", type=Path, required=True)
     review.add_argument("--output", type=Path, required=True)
     review.set_defaults(func=command_review)
+
+    pilot = commands.add_parser(
+        "pilot-find-mentions",
+        help=(
+            "Experimental Gemini person-name span pilot for one displayed body. "
+            "Not a pipeline step, not a versioned artifact, and not a production write."
+        ),
+    )
+    pilot.add_argument("--documents", type=Path, required=True)
+    pilot.add_argument("--archive-item-id", type=int, required=True)
+    pilot.add_argument("--evidence-source")
+    pilot.add_argument("--identity", type=Path, required=True)
+    pilot.add_argument("--output", type=Path, required=True)
+    pilot.set_defaults(func=command_pilot_find_mentions)
 
     checkpoint = commands.add_parser("checkpoint")
     checkpoint.add_argument("--run-id", required=True)
