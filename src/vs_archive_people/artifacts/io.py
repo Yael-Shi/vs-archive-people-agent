@@ -23,6 +23,7 @@ RESOLUTION_REPORT_SCHEMA = "resolution-report-v1"
 IDENTITY_REVIEW_PACKAGE_SCHEMA = "identity-review-package-v1"
 RUN_CHECKPOINT_SCHEMA = "run-checkpoint-v1"
 DISCOVERY_SELECTION_SCHEMA = "discovery-selection-v1"
+MENTION_PROPOSALS_SCHEMA = "mention-proposals-v1"
 
 
 class ArtifactError(ValueError):
