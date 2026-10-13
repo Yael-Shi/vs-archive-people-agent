@@ -39,7 +39,7 @@ Generated artifacts, produced and stamped here:
 - mention proposals (`mention-proposals-v1`)
 - mention-proposal diagnostics (`mention-proposal-diagnostics-v1`)
 - evidence package (`evidence-package-v1` and `evidence-package-v2`)
-- resolution report
+- resolution report (`resolution-report-v1` and `resolution-report-v2`)
 - identity-review package
 - run checkpoint
 
@@ -59,7 +59,7 @@ A title is metadata, not evidence. Eligible bodies are the displayed OCR transcr
 
 `mention-proposal-diagnostics-v1` is a sidecar written after the proposal file. It stores the proposal logical hash and the proposal file hash, plus rejected, suppressed, and conflict rows. It is not an input to v1 or v2 freeze. Freeze v2 has no diagnostics argument and does not search for the sidecar. Publication is not a two-file transaction: a sidecar failure leaves the proposal in place.
 
-v1 evidence, resolution, review, and `run-checkpoint-v1` are unchanged. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`. Resolution-report-v2, identity-review-package-v2, and run-checkpoint-v2 are not implemented.
+v1 evidence, resolution, review, and `run-checkpoint-v1` are unchanged. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`. `resolve-v2` publishes `resolution-report-v2` outside that sequence. Identity-review-package-v2 and run-checkpoint-v2 are not implemented.
 
 ## Mention identity
 
@@ -67,7 +67,11 @@ v1 evidence, resolution, review, and `run-checkpoint-v1` are unchanged. `RUN_STE
 
 ## Identity resolution
 
-A deterministic match is an exact normalized hit on exactly one production `Person.name` or existing `PersonAlias.name`. Normalization is NFKC, casefold, and whitespace collapse. There is no fuzzy match and no title stripping. Confidence is stored and never chooses a class. Pending rows and local candidates are not production identity. A shared normalized name stays ambiguous.
+A deterministic match is an exact normalized hit on exactly one production `Person.name` or existing `PersonAlias.name`. Normalization is NFKC, casefold, and whitespace collapse. There is no fuzzy match. Confidence is stored on v1 and never chooses a class. Pending rows are not production identity. A shared normalized name stays ambiguous.
+
+v1 `resolve` matches `exact_mention` from `evidence-package-v1`. It does not strip titles. v1 local candidates may be recorded as overlap. They are not production identity.
+
+`resolve-v2` matches the frozen `name_surface` from `evidence-package-v2`. Freeze already verified that slice, so resolve does not parse a title or peel a prefix again. `exact_mention` stays on the row for review. Detector provenance is copied and does not assign a person. v2 has no `NOT_A_PERSON` outcome and does not read local candidates. Both commands are read-only. `production_write_performed` stays false.
 
 ## Review boundary
 
@@ -75,7 +79,7 @@ Deterministic existing-person matches are recorded as auto-resolution proposals.
 
 ## Provenance and hashes
 
-A logical content hash identifies the semantic body of a generated artifact. A physical file hash identifies the published bytes, including timestamp and producer. A child binds a generated parent by the parent's logical hash and may also record that parent's file hash for audit. Plain external inputs that affect an output are bound the same way: the v1 evidence package records `mention_proposals_file_sha256`. Evidence-package-v2 also records `mention_proposals_logical_sha256` because that parent is a generated artifact. The resolution report records `local_candidates_file_sha256` (null when no file was supplied). Those hashes do not replace the frozen mentions or the resolution rows. Audit-only file hashes do not change the child's logical hash. On consumption, a generated artifact is schema-checked and its stored logical hash is recomputed. A mismatch fails closed. External snapshots are not given that logical-hash check.
+A logical content hash identifies the semantic body of a generated artifact. A physical file hash identifies the published bytes, including timestamp and producer. A child binds a generated parent by the parent's logical hash and may also record that parent's file hash for audit. Plain external inputs that affect an output are bound the same way: the v1 evidence package records `mention_proposals_file_sha256`. Evidence-package-v2 also records `mention_proposals_logical_sha256` because that parent is a generated artifact. The v1 resolution report records `local_candidates_file_sha256` (null when no file was supplied). `resolution-report-v2` records the evidence file hash and the identity snapshot file hash, and it does not take local candidates. Those hashes do not replace the frozen mentions or the resolution rows. Audit-only file hashes do not change the child's logical hash. On consumption, a generated artifact is schema-checked and its stored logical hash is recomputed. A mismatch fails closed. External snapshots are not given that logical-hash check.
 
 ## Run and checkpoint model
 
@@ -115,4 +119,4 @@ Individual validation sentences are not part of this summary.
 
 ## Future extension points
 
-Not implemented: resolution-report-v2, identity-review-package-v2, run-checkpoint-v2, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. `evidence-package-v2` is implemented. `find-mentions` publishes `mention-proposals-v1` and the diagnostics sidecar. It does not change v1 freeze, resolution, review, or checkpoints. The Gemini mention pilot remains a separate experiment.
+Not implemented: identity-review-package-v2, run-checkpoint-v2, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. `evidence-package-v2` and `resolution-report-v2` are implemented. `resolve-v2` is outside `RUN_STEPS`. `find-mentions` publishes `mention-proposals-v1` and the diagnostics sidecar. It does not change v1 freeze, resolution, review, or checkpoints. The Gemini mention pilot remains a separate experiment.

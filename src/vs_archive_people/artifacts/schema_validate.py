@@ -23,6 +23,7 @@ SCHEMA_FILES = {
     "evidence-package-v2": "evidence_package.v2.json",
     "identity-snapshot-v1": "identity_snapshot.v1.json",
     "resolution-report-v1": "resolution_report.v1.json",
+    "resolution-report-v2": "resolution_report.v2.json",
     "identity-review-package-v1": "identity_review_package.v1.json",
     "run-checkpoint-v1": "run_checkpoint.v1.json",
     "mention-proposals-v1": "mention_proposals.v1.json",

@@ -3,7 +3,9 @@
 Pipeline commands: discover, freeze-evidence, resolve, review-package, checkpoint.
 ``freeze-evidence`` reads a loose proposal list and publishes evidence-package-v1.
 ``freeze-evidence-v2`` reads mention-proposals-v1 and publishes evidence-package-v2.
-It is not a pipeline step. ``package-mention-proposals`` publishes
+``resolve`` reads evidence-package-v1. ``resolve-v2`` reads evidence-package-v2
+and publishes resolution-report-v2. Neither v2 command is a pipeline step.
+``package-mention-proposals`` publishes
 mention-proposals-v1 from human geometry. ``find-mentions`` publishes the same
 artifact from automated detection, plus a diagnostic sidecar.
 ``pilot-find-mentions`` is experimental. None of those commands is a pipeline
@@ -40,6 +42,7 @@ from vs_archive_people.evidence.package import build_evidence_package
 from vs_archive_people.evidence.package_v2 import build_evidence_package_v2
 from vs_archive_people.identity_review.package import build_review_package
 from vs_archive_people.resolution.match import build_resolution_report
+from vs_archive_people.resolution.match_v2 import build_resolution_report_v2
 from vs_archive_people.resolution.snapshot_index import build_index
 from vs_archive_people.artifacts.schema_validate import step_chain
 from vs_archive_people.mention_pilot.gemini import GeminiMentionDetector
@@ -171,6 +174,30 @@ def command_resolve(args: argparse.Namespace) -> int:
     )
     digest = write_json_atomic(args.output, report)
     _ok({"output_sha256": digest, "resolutions": len(report["resolutions"])})
+    return 0
+
+
+def command_resolve_v2(args: argparse.Namespace) -> int:
+    """Classify evidence-package-v2 by name_surface. Does not write production."""
+    evidence = read_json(args.evidence)
+    identity = read_json(args.identity)
+    report = build_resolution_report_v2(
+        evidence,
+        build_index(identity),
+        run_id=args.run_id,
+        evidence_package_file_sha256=sha256_file(args.evidence),
+        identity_snapshot_file_sha256=sha256_file(args.identity),
+    )
+    digest = write_json_atomic(args.output, report)
+    _ok(
+        {
+            "output_sha256": digest,
+            "logical_content_sha256": report["logical_content_sha256"],
+            "schema_version": report["schema_version"],
+            "resolutions": len(report["resolutions"]),
+            "production_write_performed": report["production_write_performed"],
+        }
+    )
     return 0
 
 
@@ -380,6 +407,19 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--local-candidates", type=Path)
     resolve.add_argument("--output", type=Path, required=True)
     resolve.set_defaults(func=command_resolve)
+
+    resolve_v2 = commands.add_parser(
+        "resolve-v2",
+        help=(
+            "Classify evidence-package-v2 against an identity snapshot using "
+            "name_surface. Not a pipeline step. Does not write production identity."
+        ),
+    )
+    resolve_v2.add_argument("--evidence", type=Path, required=True)
+    resolve_v2.add_argument("--identity", type=Path, required=True)
+    resolve_v2.add_argument("--run-id", required=True)
+    resolve_v2.add_argument("--output", type=Path, required=True)
+    resolve_v2.set_defaults(func=command_resolve_v2)
 
     review = commands.add_parser("review-package")
     review.add_argument("--resolution", type=Path, required=True)

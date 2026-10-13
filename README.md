@@ -67,7 +67,17 @@ python -m vs_archive_people.cli checkpoint \
 
 `freeze-evidence` does not find person names. It validates the loose mention-proposal list and publishes `evidence-package-v1`. It does not accept `mention-proposals-v1`. `mention_key` is a run-local label such as `M0001`. `mention_fingerprint` is the durable SHA-256 of the source position. See `docs/contracts.md`.
 
-`freeze-evidence-v2` publishes `evidence-package-v2` from `mention-proposals-v1`. It is not a checkpoint step. It re-checks every span against the displayed body. It does not read the diagnostics sidecar, and it does not assign identity. v1 resolution and review do not consume that package. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`.
+`freeze-evidence-v2` publishes `evidence-package-v2` from `mention-proposals-v1`. It is not a checkpoint step. It re-checks every span against the displayed body. It does not read the diagnostics sidecar, and it does not assign identity. v1 `resolve` and review do not consume that package. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`.
+
+`resolve-v2` publishes `resolution-report-v2` from `evidence-package-v2` and an identity snapshot. It is not a checkpoint step. The lookup string is the frozen `name_surface`. The full `exact_mention` stays on the row for review. The command does not create or update a Person, alias, merge, or canonical name. `production_write_performed` is false. It does not read v1 evidence, and v1 `resolve` does not read v2 evidence. Review still reads only `resolution-report-v1`.
+
+```bash
+python -m vs_archive_people.cli resolve-v2 \
+  --evidence runs/evidence-v2.json \
+  --identity data/identity_snapshot.json \
+  --run-id run-001 \
+  --output runs/resolution-v2.json
+```
 
 ```bash
 python -m vs_archive_people.cli freeze-evidence-v2 \
