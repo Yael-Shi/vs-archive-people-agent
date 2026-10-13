@@ -71,7 +71,10 @@ def require_mention_proposal_constraints(document: dict) -> None:
     require_unique_outer_spans(mentions)
 
 
-def _require_mention(mention: dict, declared: set[str]) -> None:
+def require_declared_detectors_and_known_name_quality(
+    mention: dict, declared: set[str]
+) -> None:
+    """Detector ids must be declared. Known-name quality is tied to that id."""
     for detector_id in mention["detector_ids"]:
         if detector_id not in declared:
             raise ArtifactError(
@@ -87,6 +90,10 @@ def _require_mention(mention: dict, declared: set[str]) -> None:
         raise ArtifactError(
             "known_name_match_quality is allowed only when known-name contributed"
         )
+
+
+def _require_mention(mention: dict, declared: set[str]) -> None:
+    require_declared_detectors_and_known_name_quality(mention, declared)
     start = mention["start_offset"]
     end = mention["end_offset"]
     name_start = mention["name_start_offset"]
@@ -129,7 +136,7 @@ def _require_mention(mention: dict, declared: set[str]) -> None:
                 "title_surface does not match exact_mention at the title offsets"
             )
     require_at_most_one_line_break(outer)
-    _require_surface_kind(mention.get("surface_kind"), title is not None)
+    require_surface_kind(mention.get("surface_kind"), title is not None)
     require_split_residue(
         outer,
         relative_name_start,
@@ -139,7 +146,7 @@ def _require_mention(mention: dict, declared: set[str]) -> None:
     )
 
 
-def _require_surface_kind(surface_kind: object, title_present: bool) -> None:
+def require_surface_kind(surface_kind: object, title_present: bool) -> None:
     if surface_kind == "TITLE_AND_NAME" and not title_present:
         raise ArtifactError("TITLE_AND_NAME requires a title slice")
     if title_present and surface_kind in _KINDS_WITHOUT_TITLE:

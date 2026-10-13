@@ -20,6 +20,7 @@ SCHEMA_FILES = {
     "document-text-snapshot-v1": "document_text_snapshot.v1.json",
     "discovery-selection-v1": "discovery_selection.v1.json",
     "evidence-package-v1": "evidence_package.v1.json",
+    "evidence-package-v2": "evidence_package.v2.json",
     "identity-snapshot-v1": "identity_snapshot.v1.json",
     "resolution-report-v1": "resolution_report.v1.json",
     "identity-review-package-v1": "identity_review_package.v1.json",

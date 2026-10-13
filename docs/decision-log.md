@@ -611,4 +611,23 @@ The pilot showed that hybrid surface detection is usable, and the proposal contr
 
 ### Consequences
 
-The command reads a document-text snapshot, a discovery selection, and an identity snapshot. It writes no production data and creates no alias or merge. Official proposals are not a v1 freeze input. Evidence-package-v2, resolution-report-v2, identity-review-package-v2, and run-checkpoint-v2 remain unimplemented. See `docs/contracts.md`.
+The command reads a document-text snapshot, a discovery selection, and an identity snapshot. It writes no production data and creates no alias or merge. Official proposals are not a v1 freeze input. Resolution-report-v2, identity-review-package-v2, and run-checkpoint-v2 remain unimplemented. ADR-036 adds evidence-package-v2. See `docs/contracts.md`.
+
+## ADR-036 — evidence-package-v2 is the freeze trust boundary
+
+- Date: 2026-10-13
+- Status: Accepted
+
+### Decision
+
+`freeze-evidence-v2` publishes `evidence-package-v2` from a document-text snapshot, a discovery selection, and `mention-proposals-v1`. v1 `freeze-evidence` stays on the loose proposal list and rejects `mention-proposals-v1`. `mention-proposals-v1` is detection geometry. Freeze v2 is the trust boundary: it verifies the proposal artifact and then re-slices every outer, name, and title span from the unmodified displayed body. The diagnostics sidecar is not an input. Freeze does not open the identity snapshot named on the proposal and does not copy that hash as an evidence parent. Freeze assigns no `person_id` and no alias, merge, or canonical-name action.
+
+Occurrence identity stays the v1 fingerprint: archive item, evidence source, displayed-body hash, and outer offsets. Detector provenance does not create a new occurrence. `RUN_STEPS` stays `discover -> freeze-evidence -> resolve -> review`. This phase does not implement resolution-report-v2, identity-review-package-v2, run-checkpoint-v2, checkpoint migration, or retirement of v1 freeze.
+
+### Rationale
+
+ADR-006 separates finding names from freezing evidence. ADR-034 and ADR-035 publish official geometry outside the v1 pipeline so detection can be reviewed without becoming evidence. Feeding that file to v1 freeze would mix loose proposal identity fields into a contract that no longer carries them. A second freeze command keeps v1 callers unambiguous and makes the source re-check the point where geometry becomes evidence.
+
+### Consequences
+
+`evidence-package-v2` binds discovery and the proposal by logical hash, and records the document, discovery, and proposal file hashes for audit under the existing `*_file_sha256` exclusion rule. A wrong generation fails closed. v1 resolution, review, and checkpoints do not read the v2 package. See `docs/contracts.md`.

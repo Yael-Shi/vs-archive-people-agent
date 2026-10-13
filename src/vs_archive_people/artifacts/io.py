@@ -19,6 +19,7 @@ from typing import Any
 DOCUMENT_TEXT_SNAPSHOT_SCHEMA = "document-text-snapshot-v1"
 IDENTITY_SNAPSHOT_SCHEMA = "identity-snapshot-v1"
 EVIDENCE_PACKAGE_SCHEMA = "evidence-package-v1"
+EVIDENCE_PACKAGE_V2_SCHEMA = "evidence-package-v2"
 RESOLUTION_REPORT_SCHEMA = "resolution-report-v1"
 IDENTITY_REVIEW_PACKAGE_SCHEMA = "identity-review-package-v1"
 RUN_CHECKPOINT_SCHEMA = "run-checkpoint-v1"

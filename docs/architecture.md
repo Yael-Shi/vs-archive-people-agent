@@ -38,7 +38,7 @@ Generated artifacts, produced and stamped here:
 - discovery selection
 - mention proposals (`mention-proposals-v1`)
 - mention-proposal diagnostics (`mention-proposal-diagnostics-v1`)
-- evidence package
+- evidence package (`evidence-package-v1` and `evidence-package-v2`)
 - resolution report
 - identity-review package
 - run checkpoint
@@ -51,17 +51,19 @@ A title is metadata, not evidence. Eligible bodies are the displayed OCR transcr
 
 ## Mention proposals and freeze-evidence
 
-`freeze-evidence` does not find person names. The v1 command still reads a loose proposal list, or an object with a `mentions` array, and checks those proposals against the displayed body. It publishes an immutable evidence package. It does not discover names, assign production identity, or write production data.
+`freeze-evidence` does not find person names. The v1 command still reads a loose proposal list, or an object with a `mentions` array, and checks those proposals against the displayed body. It publishes `evidence-package-v1`. It does not discover names, assign production identity, or write production data. It refuses `mention-proposals-v1`.
 
-`mention-proposals-v1` is a separate generated artifact. Two producers write it. `package-mention-proposals` publishes it from human geometry: offsets and an optional `surface_kind`. The command derives `exact_mention`, `name_surface`, `title_surface`, and `evidence_snippet` from the displayed body, then orders mentions by archive item, evidence source, and outer offsets before stamping. It inserts the `human-authored` detector, leaves `identity_snapshot_file_sha256` null, and does not call a provider. `find-mentions` publishes the same contract for the whole discovery selection. It records the `semantic-surface` and `known-name` detectors, and it does not assign a `person_id`. `freeze-evidence` does not read `mention-proposals-v1`. Artifact validation rejects a duplicate outer span, an outer span with more than one line break, and a `surface_kind` that contradicts the title slice.
+`mention-proposals-v1` is detection geometry, not evidence. Two producers write it. `package-mention-proposals` publishes it from human geometry: offsets and an optional `surface_kind`. The command derives `exact_mention`, `name_surface`, `title_surface`, and `evidence_snippet` from the displayed body, then orders mentions by archive item, evidence source, and outer offsets before stamping. It inserts the `human-authored` detector, leaves `identity_snapshot_file_sha256` null, and does not call a provider. `find-mentions` publishes the same contract for the whole discovery selection. It records the `semantic-surface` and `known-name` detectors, and it does not assign a `person_id`. Artifact validation rejects a duplicate outer span, an outer span with more than one line break, and a `surface_kind` that contradicts the title slice.
 
-`mention-proposal-diagnostics-v1` is a sidecar written after the proposal file. It stores the proposal logical hash and the proposal file hash, plus rejected, suppressed, and conflict rows. It is not an input to freeze. Publication is not a two-file transaction: a sidecar failure leaves the proposal in place.
+`freeze-evidence-v2` is the trust boundary for that artifact. It is outside `RUN_STEPS`. It reads the document-text snapshot, the discovery selection, and `mention-proposals-v1`, then publishes `evidence-package-v2`. Before it freezes a row it verifies the proposal as a generated artifact: schema `mention-proposals-v1`, recomputed logical hash, the same `run_id`, and parent hashes for the document snapshot file, the discovery logical hash, and the discovery file. It then re-slices every outer, name, and title span from the unmodified displayed body and applies the official geometry rules again. A duplicate outer span fails closed. It does not assign `person_id` or an alias, merge, or canonical-name action. The proposal's `identity_snapshot_file_sha256` stays detection provenance. Freeze v2 does not open that snapshot and does not record it as an evidence parent.
 
-v1 evidence, resolution, review, and `run-checkpoint-v1` are unchanged. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`.
+`mention-proposal-diagnostics-v1` is a sidecar written after the proposal file. It stores the proposal logical hash and the proposal file hash, plus rejected, suppressed, and conflict rows. It is not an input to v1 or v2 freeze. Freeze v2 has no diagnostics argument and does not search for the sidecar. Publication is not a two-file transaction: a sidecar failure leaves the proposal in place.
+
+v1 evidence, resolution, review, and `run-checkpoint-v1` are unchanged. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`. Resolution-report-v2, identity-review-package-v2, and run-checkpoint-v2 are not implemented.
 
 ## Mention identity
 
-`mention_key` (`M0001` and so on) is a label for one run. `mention_fingerprint` is the durable identity of one occurrence. The fingerprint is the SHA-256 of the archive item, evidence source, source-text hash, and the start and end offsets. Offsets are zero-based Python code-point offsets into that displayed body. The slice `body_text[start_offset:end_offset]` must equal `exact_mention` with no whitespace rewrite. `occurrence_index` is display order derived from those offsets. A caller-supplied key, fingerprint, or index is discarded.
+`mention_key` (`M0001` and so on) is a label for one run. `mention_fingerprint` is the durable identity of one occurrence. The fingerprint is the SHA-256 of the archive item, evidence source, source-text hash, and the start and end offsets. Offsets are zero-based Python code-point offsets into that displayed body. The slice `body_text[start_offset:end_offset]` must equal `exact_mention` with no whitespace rewrite. `occurrence_index` is display order derived from those offsets. A caller-supplied key, fingerprint, or index is discarded. Evidence-package-v2 uses that same occurrence identity. Name text, title text, detector ids, and model metadata are not part of the digest. A change of detector provenance does not create a new source occurrence.
 
 ## Identity resolution
 
@@ -73,7 +75,7 @@ Deterministic existing-person matches are recorded as auto-resolution proposals.
 
 ## Provenance and hashes
 
-A logical content hash identifies the semantic body of a generated artifact. A physical file hash identifies the published bytes, including timestamp and producer. A child binds a generated parent by the parent's logical hash and may also record that parent's file hash for audit. Plain external inputs that affect an output are bound the same way: the evidence package records `mention_proposals_file_sha256`, and the resolution report records `local_candidates_file_sha256` (null when no file was supplied). Those hashes do not replace the frozen mentions or the resolution rows. Audit-only file hashes do not change the child's logical hash. On consumption, a generated artifact is schema-checked and its stored logical hash is recomputed. A mismatch fails closed. External snapshots are not given that logical-hash check.
+A logical content hash identifies the semantic body of a generated artifact. A physical file hash identifies the published bytes, including timestamp and producer. A child binds a generated parent by the parent's logical hash and may also record that parent's file hash for audit. Plain external inputs that affect an output are bound the same way: the v1 evidence package records `mention_proposals_file_sha256`. Evidence-package-v2 also records `mention_proposals_logical_sha256` because that parent is a generated artifact. The resolution report records `local_candidates_file_sha256` (null when no file was supplied). Those hashes do not replace the frozen mentions or the resolution rows. Audit-only file hashes do not change the child's logical hash. On consumption, a generated artifact is schema-checked and its stored logical hash is recomputed. A mismatch fails closed. External snapshots are not given that logical-hash check.
 
 ## Run and checkpoint model
 
@@ -104,7 +106,7 @@ Individual validation sentences are not part of this summary.
 
 ## Current non-goals
 
-- feeding official proposals into v1 freeze. `find-mentions` and `package-mention-proposals` publish `mention-proposals-v1` outside `RUN_STEPS`. v1 `freeze-evidence` still reads the loose proposal list. An isolated Gemini mention pilot can propose surface spans for one displayed body. The pilot is not a pipeline step and not a versioned artifact. See `docs/gemini-mention-pilot.md`.
+- feeding official proposals into v1 freeze. `find-mentions` and `package-mention-proposals` publish `mention-proposals-v1` outside `RUN_STEPS`. v1 `freeze-evidence` still reads the loose proposal list. `freeze-evidence-v2` is the only freeze path that reads the official proposal. An isolated Gemini mention pilot can propose surface spans for one displayed body. The pilot is not a pipeline step and not a versioned artifact. See `docs/gemini-mention-pilot.md`.
 - historical or internet research
 - biographies
 - tagging
@@ -113,4 +115,4 @@ Individual validation sentences are not part of this summary.
 
 ## Future extension points
 
-Not implemented: evidence-package-v2, resolution-report-v2, identity-review-package-v2, run-checkpoint-v2, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. `find-mentions` publishes `mention-proposals-v1` and the diagnostics sidecar. It does not change v1 freeze, resolution, review, or checkpoints. The Gemini mention pilot remains a separate experiment.
+Not implemented: resolution-report-v2, identity-review-package-v2, run-checkpoint-v2, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. `evidence-package-v2` is implemented. `find-mentions` publishes `mention-proposals-v1` and the diagnostics sidecar. It does not change v1 freeze, resolution, review, or checkpoints. The Gemini mention pilot remains a separate experiment.

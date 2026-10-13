@@ -65,11 +65,22 @@ python -m vs_archive_people.cli checkpoint \
 
 `--prior-checkpoint` is optional. A later checkpoint of the same run is a new file. It takes `--prior` and continues only in the order `discover -> freeze-evidence -> resolve -> review`. Every input hash already recorded for the run must be supplied again and must match. Existing output paths are refused.
 
-`freeze-evidence` does not find person names. It validates the loose mention-proposal list and publishes the evidence package. `mention_key` is a run-local label such as `M0001`. `mention_fingerprint` is the durable SHA-256 of the source position. See `docs/contracts.md`.
+`freeze-evidence` does not find person names. It validates the loose mention-proposal list and publishes `evidence-package-v1`. It does not accept `mention-proposals-v1`. `mention_key` is a run-local label such as `M0001`. `mention_fingerprint` is the durable SHA-256 of the source position. See `docs/contracts.md`.
 
-`package-mention-proposals` publishes `mention-proposals-v1` from human geometry. It is not a checkpoint step and it does not call a provider. `freeze-evidence` does not read that file.
+`freeze-evidence-v2` publishes `evidence-package-v2` from `mention-proposals-v1`. It is not a checkpoint step. It re-checks every span against the displayed body. It does not read the diagnostics sidecar, and it does not assign identity. v1 resolution and review do not consume that package. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`.
 
-`find-mentions` publishes the same `mention-proposals-v1` artifact for a whole discovery selection. It is not a checkpoint step. A semantic detector proposes source surfaces, and a deterministic detector adds exact accepted names. The command assigns no production identity. Rejected, suppressed, and conflicting candidates go to `mention-proposal-diagnostics-v1`, which freeze does not read. If the proposal file is published and the sidecar write fails, the proposal stays and the command exits nonzero.
+```bash
+python -m vs_archive_people.cli freeze-evidence-v2 \
+  --documents data/document_text_snapshot.json \
+  --discovery runs/discovery.json \
+  --mentions runs/mention-proposals.json \
+  --run-id run-001 \
+  --output runs/evidence-v2.json
+```
+
+`package-mention-proposals` publishes `mention-proposals-v1` from human geometry. It is not a checkpoint step and it does not call a provider. v1 `freeze-evidence` does not read that file. `freeze-evidence-v2` does.
+
+`find-mentions` publishes the same `mention-proposals-v1` artifact for a whole discovery selection. It is not a checkpoint step. A semantic detector proposes source surfaces, and a deterministic detector adds exact accepted names. The command assigns no production identity. Rejected, suppressed, and conflicting candidates go to `mention-proposal-diagnostics-v1`. Neither freeze command reads that sidecar. If the proposal file is published and the sidecar write fails, the proposal stays and the command exits nonzero.
 
 ```bash
 python -m vs_archive_people.cli find-mentions \
