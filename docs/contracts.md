@@ -72,7 +72,7 @@ An item is selected when its id is absent from the prior checkpoint `processed_i
 
 File: `src/vs_archive_people/schemas/mention_proposals.v1.json`.
 
-Written by `package-mention-proposals` or `find-mentions`. This is a generated artifact. It uses the same provenance, logical-hash, and atomic no-clobber publication rules as the other generated artifacts. `freeze-evidence` does not read this file. The v1 loose proposal list remains the freeze input. Official proposals must not be fed to v1 freeze.
+Written by `package-mention-proposals` or `find-mentions`. This is a generated artifact. It uses the same provenance, logical-hash, and atomic no-clobber publication rules as the other generated artifacts. v1 `freeze-evidence` does not read this file. The v1 loose proposal list remains that command's input. Official proposals must not be fed to v1 freeze. `freeze-evidence-v2` is the consumer. See evidence-package-v2 below.
 
 Required top-level fields:
 
@@ -167,7 +167,7 @@ Built only for the discovery selection. `freeze-evidence` requires `discovery.ru
 
 The package records `document_snapshot_file_sha256`, `discovery_logical_sha256`, `discovery_file_sha256`, and `mention_proposals_file_sha256`. The logical field is copied from the verified discovery artifact. The file fields are audit hashes of the snapshot file, the discovery file, and the mention-proposals file. `mention_proposals_file_sha256` does not replace the frozen mentions stored in the package. `freeze-evidence` refuses a discovery file whose document file hash is not the hash of the snapshot just read, and refuses a selected item whose displayed-text hash no longer matches. Offsets are zero-based Python code-point indexes into the exact displayed body. `body_text[start_offset:end_offset]` must equal `exact_mention` with no whitespace normalization. The snippet check may still collapse whitespace. A duplicate fingerprint is refused. A duplicate source span for one item and text role is refused.
 
-Mention finding is not this step. `freeze-evidence` only checks the loose proposal list and publishes the evidence package. It does not read `mention-proposals-v1`.
+Mention finding is not this step. `freeze-evidence` only checks the loose proposal list and publishes the evidence package. It does not read `mention-proposals-v1`. A file whose `schema_version` is `mention-proposals-v1` is `UNSUPPORTED_SCHEMA_VERSION`.
 
 The v1 freeze input remains a JSON list, or an object with a `mentions` array:
 
@@ -185,6 +185,41 @@ confidence                 optional integer 0..100
 ```
 
 `start_offset` and `end_offset` are zero-based offsets into the displayed body named by `evidence_source`. `freeze-evidence` is the consumer of those records. It assigns `mention_key`, `mention_fingerprint`, and `occurrence_index`. A caller `occurrence_index`, `mention_key`, or `mention_fingerprint` is not identity. The finder must not assign production identity, approve a new Person, or write production data. `find-mentions` publishes `mention-proposals-v1` and does not feed that file to this command. The human command `package-mention-proposals` publishes the same official file from geometry. That official file is not a v1 freeze input.
+
+## evidence-package-v2
+
+File: `src/vs_archive_people/schemas/evidence_package.v2.json`.
+
+Written by `freeze-evidence-v2`. This command is outside `RUN_STEPS`. It does not replace v1 freeze. Inputs are the document-text snapshot, the discovery selection, `mention-proposals-v1`, the run id, and the output path. There is no diagnostics argument, no loose proposal list, and no identity snapshot. Passing a loose v1 proposal list is `UNSUPPORTED_SCHEMA_VERSION` when the value is an object, and `MALFORMED_ARTIFACT` when it is a list. There is no automatic migration.
+
+```text
+freeze-evidence-v2 \
+  --documents data/document_text_snapshot.json \
+  --discovery runs/discovery.json \
+  --mentions runs/mention-proposals.json \
+  --run-id run-001 \
+  --output runs/evidence-v2.json
+```
+
+The package is a generated artifact. Logical parents are `discovery_logical_sha256` and `mention_proposals_logical_sha256`. Audit-only physical hashes are `document_snapshot_file_sha256`, `discovery_file_sha256`, and `mention_proposals_file_sha256`. Those three names end in `_file_sha256`, so the existing logical-hash exclusion rule leaves them out of the package logical body. `identity_snapshot_file_sha256` on the proposal is not copied.
+
+Before mentions are frozen, the command requires a generated `mention-proposals-v1` artifact, recomputes its logical hash, requires `run_id` to equal the active run, requires the proposal's document snapshot file hash to equal the snapshot file supplied to freeze, and requires the proposal's discovery logical hash and discovery file hash to equal the verified discovery artifact and the discovery file supplied to freeze. A wrong schema is `UNSUPPORTED_SCHEMA_VERSION`. A logical-hash mismatch on the proposal or on discovery is `LOGICAL_HASH_MISMATCH`. A run-id mismatch is `RUN_ID_MISMATCH`. A parent hash that does not match the files supplied to this command is `INPUT_HASH_CHANGED`.
+
+Discovery follows the v1 source-selection rules. The discovery artifact must be valid, share `run_id`, and be bound to this document snapshot file. Every proposal row must belong to a selected item. Every selected item's `displayed_text_sha256` must still match. `evidence_source` must name a displayed role for that item. A proposal outside the selection is rejected.
+
+For every mention, freeze re-slices the unmodified displayed body:
+
+- `body[start_offset:end_offset]` equals `exact_mention`
+- `body[name_start_offset:name_end_offset]` equals `name_surface`
+- when a title is present, `body[title_start_offset:title_end_offset]` equals `title_surface`
+
+It also requires a non-empty outer span, a non-empty name span inside that outer span, title offsets that are both null or both integers, a title span inside the outer span, no overlap between title and name, at most one line break in the outer span, and split residue that satisfies the official geometry rule. `surface_kind` must agree with title presence. Detector ids must be declared in the proposal registry. `known_name_match_quality` is non-null exactly when `known-name` contributed, and then only `EXACT_BOUNDARY` or `PREFIXED`. These checks run again at freeze. A proposal that validated when it was written is not trusted for source geometry. A duplicate `(archive_item_id, evidence_source, start_offset, end_offset)` fails closed. Rows are not silently deduplicated.
+
+Each evidence row stores `mention_key`, `mention_fingerprint`, `occurrence_index`, `source_text_sha256`, and the verified proposal geometry: `archive_item_id`, `evidence_source`, `exact_mention`, `start_offset`, `end_offset`, `evidence_snippet`, `name_surface`, `name_start_offset`, `name_end_offset`, `title_surface`, `title_start_offset`, `title_end_offset`, `surface_kind`, `detector_ids`, and `known_name_match_quality`. `source_text_sha256` is the displayed-body hash already used by the v1 fingerprint. The row does not store the detector registry, provider metadata, `person_id`, `mention_class`, `propose_alias`, `proposed_identity_action`, or confidence.
+
+Occurrence identity is unchanged from v1. `mention_fingerprint` is the SHA-256 of canonical JSON for `archive_item_id`, `evidence_source`, `source_text_sha256` (lowercase), `start_offset`, and `end_offset`. It does not include `name_surface`, title text, `detector_ids`, or model metadata. `mention_key` is assigned in order of archive item, evidence source, and outer offsets. `occurrence_index` is display order inside each `(archive_item_id, evidence_source)` from those offsets. Equivalent proposal rows in a different JSON order produce the same evidence mention rows. The proposal logical hash still follows the supplied artifact, so two proposal files that differ only by mention order have different parent hashes and different package logical hashes even when the mention rows match. Producers that sort before stamping, as `package-mention-proposals` does, produce equivalent package logical hashes.
+
+`production_write_performed` is false. Selected items are stored in the same shape as v1. Resolution, review, and `run-checkpoint-v1` do not read this package.
 
 ## resolution-report-v1
 
@@ -239,7 +274,7 @@ Contract failures use these `error_code` values: `MALFORMED_ARTIFACT`, `ARTIFACT
 
 ## Provenance and hashes
 
-Generated artifacts are discovery selections, mention proposals, evidence packages, resolution reports, identity review packages, and run checkpoints. Each records:
+Generated artifacts are discovery selections, mention proposals, mention-proposal diagnostics, evidence packages (`evidence-package-v1` and `evidence-package-v2`), resolution reports, identity review packages, and run checkpoints. Each records:
 
 - `artifact_created_at` — UTC time `YYYY-MM-DDThh:mm:ssZ`
 - `producer.name` — `vs-archive-people`
@@ -253,7 +288,7 @@ Generated artifacts are discovery selections, mention proposals, evidence packag
 
 `logical_content_sha256` is the SHA-256 of canonical JSON (`sort_keys`, compact separators, UTF-8) after dropping publication metadata and audit-only file hashes. Excluded keys are `artifact_created_at`, `producer`, `logical_content_sha256`, and any top-level key ending in `_file_sha256`. Keys ending in `_logical_sha256` stay in the logical body. Rebuilding a parent at a new timestamp changes its file hash and leaves its logical hash unchanged. A child that binds the parent logical hash therefore keeps the same logical hash and can still store the two different parent file hashes for audit.
 
-Consumers of generated artifacts validate the schema, recompute that logical hash, and refuse a mismatch as `LOGICAL_HASH_MISMATCH`. That check runs when freeze-evidence reads discovery, when `package-mention-proposals` reads discovery, when resolution reads an evidence package, when review reads a resolution report, and when discovery or checkpoint continuation reads a run checkpoint. External `document-text-snapshot-v1` and `identity-snapshot-v1` files are not generated artifacts and are bound only by file hash. `mention-proposals-v1` is validated when it is published. No later v1 step reads it.
+Consumers of generated artifacts validate the schema, recompute that logical hash, and refuse a mismatch as `LOGICAL_HASH_MISMATCH`. That check runs when freeze-evidence reads discovery, when `freeze-evidence-v2` reads discovery and `mention-proposals-v1`, when `package-mention-proposals` reads discovery, when resolution reads an evidence package, when review reads a resolution report, and when discovery or checkpoint continuation reads a run checkpoint. External `document-text-snapshot-v1` and `identity-snapshot-v1` files are not generated artifacts and are bound only by file hash. `mention-proposals-v1` is validated when it is published. No later v1 step reads it. `freeze-evidence-v2` is the first consumer, and it is outside `RUN_STEPS`. The checkpoint schema version map still records `evidence-package-v1`.
 
 The physical file hash is the SHA-256 of the indented JSON bytes that were published. `write_json_atomic` returns that hash. It changes when the timestamp or producer version changes, even when the logical hash does not.
 

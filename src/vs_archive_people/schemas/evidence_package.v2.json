@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/evidence_package.v2.json",
+  "title": "Evidence package v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "document_snapshot_file_sha256",
+    "discovery_logical_sha256",
+    "discovery_file_sha256",
+    "mention_proposals_logical_sha256",
+    "mention_proposals_file_sha256",
+    "production_write_performed",
+    "items",
+    "mentions",
+    "artifact_created_at",
+    "producer",
+    "logical_content_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "evidence-package-v2"},
+    "run_id": {"type": "string", "minLength": 1},
+    "artifact_created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "producer": {"$ref": "https://vs-archive.local/schemas/producer.v1.json"},
+    "logical_content_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "document_snapshot_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "discovery_logical_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "discovery_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "mention_proposals_logical_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "mention_proposals_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "production_write_performed": {"const": false},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["archive_item_id", "item_type", "displayed_text_sha256", "output_metadata_only", "texts"],
+        "properties": {
+          "archive_item_id": {"type": "integer"},
+          "item_type": {"enum": ["OCR_DOCUMENT", "MANUAL_TEXT"]},
+          "displayed_text_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "output_metadata_only": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title"],
+            "properties": {"title": {"type": "string"}}
+          },
+          "texts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["text_role", "text_roles", "text", "text_sha256"],
+              "properties": {
+                "text_role": {"type": "string", "minLength": 1},
+                "text_roles": {
+                  "type": "array",
+                  "items": {"type": "string", "minLength": 1}
+                },
+                "text": {"type": "string", "minLength": 1},
+                "text_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "mentions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mention_key",
+          "mention_fingerprint",
+          "occurrence_index",
+          "archive_item_id",
+          "evidence_source",
+          "source_text_sha256",
+          "exact_mention",
+          "start_offset",
+          "end_offset",
+          "evidence_snippet",
+          "name_surface",
+          "name_start_offset",
+          "name_end_offset",
+          "title_surface",
+          "title_start_offset",
+          "title_end_offset",
+          "surface_kind",
+          "detector_ids",
+          "known_name_match_quality"
+        ],
+        "properties": {
+          "mention_key": {"type": "string", "pattern": "^M[0-9]{4,}$"},
+          "mention_fingerprint": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "occurrence_index": {"type": "integer", "minimum": 0},
+          "archive_item_id": {"type": "integer"},
+          "evidence_source": {"type": "string", "minLength": 1},
+          "source_text_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "exact_mention": {"type": "string", "minLength": 1},
+          "start_offset": {"type": "integer", "minimum": 0},
+          "end_offset": {"type": "integer", "minimum": 0},
+          "evidence_snippet": {"type": "string", "minLength": 1},
+          "name_surface": {"type": "string", "minLength": 1},
+          "name_start_offset": {"type": "integer", "minimum": 0},
+          "name_end_offset": {"type": "integer", "minimum": 0},
+          "title_surface": {"type": ["string", "null"], "minLength": 1},
+          "title_start_offset": {"type": ["integer", "null"], "minimum": 0},
+          "title_end_offset": {"type": ["integer", "null"], "minimum": 0},
+          "surface_kind": {
+            "enum": [
+              "FULL_NAME",
+              "PARTIAL_NAME",
+              "TITLE_AND_NAME",
+              "NICKNAME",
+              "UNCERTAIN_PERSON_NAME",
+              null
+            ]
+          },
+          "detector_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "known_name_match_quality": {
+            "enum": ["EXACT_BOUNDARY", "PREFIXED", null]
+          }
+        }
+      }
+    }
+  }
+}

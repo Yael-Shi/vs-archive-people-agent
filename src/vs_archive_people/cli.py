@@ -1,11 +1,14 @@
 """Command line for the read-only people slice.
 
 Pipeline commands: discover, freeze-evidence, resolve, review-package, checkpoint.
-``package-mention-proposals`` publishes mention-proposals-v1 from human geometry.
-``find-mentions`` publishes the same artifact from automated detection, plus a
-diagnostic sidecar. ``pilot-find-mentions`` is experimental. None of those
-commands is a pipeline step. Each output path is published atomically and is
-refused when it already exists.
+``freeze-evidence`` reads a loose proposal list and publishes evidence-package-v1.
+``freeze-evidence-v2`` reads mention-proposals-v1 and publishes evidence-package-v2.
+It is not a pipeline step. ``package-mention-proposals`` publishes
+mention-proposals-v1 from human geometry. ``find-mentions`` publishes the same
+artifact from automated detection, plus a diagnostic sidecar.
+``pilot-find-mentions`` is experimental. None of those commands is a pipeline
+step. Each output path is published atomically and is refused when it already
+exists.
 """
 
 from __future__ import annotations
@@ -17,8 +20,10 @@ from pathlib import Path
 
 from vs_archive_people.artifacts.io import (
     EVIDENCE_PACKAGE_SCHEMA,
+    MENTION_PROPOSALS_SCHEMA,
     ArtifactError,
     RunIdMismatchError,
+    UnsupportedSchemaVersionError,
     read_json,
     sha256_file,
     write_json_atomic,
@@ -32,6 +37,7 @@ from vs_archive_people.artifacts.provenance import (
 )
 from vs_archive_people.discovery.select import select_items
 from vs_archive_people.evidence.package import build_evidence_package
+from vs_archive_people.evidence.package_v2 import build_evidence_package_v2
 from vs_archive_people.identity_review.package import build_review_package
 from vs_archive_people.resolution.match import build_resolution_report
 from vs_archive_people.resolution.snapshot_index import build_index
@@ -50,6 +56,14 @@ from vs_archive_people.runs.checkpoint import (
 
 
 def _proposals(document: object) -> list[dict]:
+    if (
+        isinstance(document, dict)
+        and document.get("schema_version") == MENTION_PROPOSALS_SCHEMA
+    ):
+        raise UnsupportedSchemaVersionError(
+            "freeze-evidence reads a loose proposal list; "
+            "mention-proposals-v1 requires freeze-evidence-v2"
+        )
     if isinstance(document, list):
         return document
     if isinstance(document, dict) and isinstance(document.get("mentions"), list):
@@ -115,6 +129,31 @@ def command_freeze_evidence(args: argparse.Namespace) -> int:
     )
     digest = write_json_atomic(args.output, package)
     _ok({"output_sha256": digest, "mentions": len(package["mentions"])})
+    return 0
+
+
+def command_freeze_evidence_v2(args: argparse.Namespace) -> int:
+    """Publish evidence-package-v2 from mention-proposals-v1."""
+    snapshot = read_json(args.documents)
+    discovery = read_json(args.discovery)
+    package = build_evidence_package_v2(
+        snapshot,
+        discovery,
+        read_json(args.mentions),
+        run_id=args.run_id,
+        document_snapshot_file_sha256=sha256_file(args.documents),
+        discovery_file_sha256=sha256_file(args.discovery),
+        mention_proposals_file_sha256=sha256_file(args.mentions),
+    )
+    digest = write_json_atomic(args.output, package)
+    _ok(
+        {
+            "output_sha256": digest,
+            "logical_content_sha256": package["logical_content_sha256"],
+            "schema_version": package["schema_version"],
+            "mentions": len(package["mentions"]),
+        }
+    )
     return 0
 
 
@@ -320,6 +359,20 @@ def build_parser() -> argparse.ArgumentParser:
     freeze.add_argument("--run-id", required=True)
     freeze.add_argument("--output", type=Path, required=True)
     freeze.set_defaults(func=command_freeze_evidence)
+
+    freeze_v2 = commands.add_parser(
+        "freeze-evidence-v2",
+        help=(
+            "Verify mention-proposals-v1 against displayed text and publish "
+            "evidence-package-v2. Not a pipeline step. Does not read diagnostics."
+        ),
+    )
+    freeze_v2.add_argument("--documents", type=Path, required=True)
+    freeze_v2.add_argument("--discovery", type=Path, required=True)
+    freeze_v2.add_argument("--mentions", type=Path, required=True)
+    freeze_v2.add_argument("--run-id", required=True)
+    freeze_v2.add_argument("--output", type=Path, required=True)
+    freeze_v2.set_defaults(func=command_freeze_evidence_v2)
 
     resolve = commands.add_parser("resolve")
     resolve.add_argument("--evidence", type=Path, required=True)
