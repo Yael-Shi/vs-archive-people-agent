@@ -656,3 +656,24 @@ ADR-036 freezes a name slice that is already checked against the displayed body.
 ### Consequences
 
 `resolve-v2` fails closed on `evidence-package-v1`, a logical-hash mismatch, or a different `run_id`. v1 `resolve` fails closed on `evidence-package-v2`. Rows are ordered by `mention_key`. One production person is deterministic, several are ambiguous, and none is a new-person candidate. No Person, alias, merge, or canonical name is created or changed. See `docs/contracts.md`.
+
+## ADR-038 — identity-review-package-v2 keeps every resolution pending for human review
+
+- Date: 2026-10-13
+- Status: Accepted
+
+### Decision
+
+`review-v2` publishes `identity-review-package-v2` from a verified `resolution-report-v2`. It is outside `RUN_STEPS`. v1 `review-package` still reads only `resolution-report-v1`. A `resolution-report-v2` input to that command is `UNSUPPORTED_SCHEMA_VERSION`. There is no automatic migration.
+
+Every v2 resolution becomes one `review_rows` entry with `review_status` `PENDING`. That includes `DETERMINISTIC_EXISTING_PERSON`. The review reason for that class is `deterministic_existing_person_pending_review`. There is no v2 `auto_resolution_proposals` list and no `proposal_status`. `identity_is_production` records that the resolution named an existing production person. It does not record human approval.
+
+`production_write_performed`, `human_approval_performed`, and `apply_authorized` are false. The package does not create a Person, alias, merge, or canonical-name change, and it does not store a human decision. Detector provenance is copied for the reviewer and does not approve a row. `run-checkpoint-v2` stays unimplemented. The v1 checkpoint schema map still records `identity-review-package-v1`.
+
+### Rationale
+
+ADR-037 can name exactly one production person and still must not treat that match as permission to write. The v1 auto-resolution list is an audit proposal for a different contract. Reusing it in v2 would let a deterministic row leave the human queue before a person has approved it.
+
+### Consequences
+
+`review-v2` fails closed on `resolution-report-v1`, a logical-hash mismatch, a different `run_id`, a duplicate mention identity, or a resolution row whose match fields disagree with its classification. v1 review of a valid `resolution-report-v1` is unchanged, including `auto_resolution_proposals`. `RUN_STEPS` stays `discover -> freeze-evidence -> resolve -> review`. See `docs/contracts.md`.

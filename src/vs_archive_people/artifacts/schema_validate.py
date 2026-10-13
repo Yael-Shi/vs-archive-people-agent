@@ -25,6 +25,7 @@ SCHEMA_FILES = {
     "resolution-report-v1": "resolution_report.v1.json",
     "resolution-report-v2": "resolution_report.v2.json",
     "identity-review-package-v1": "identity_review_package.v1.json",
+    "identity-review-package-v2": "identity_review_package.v2.json",
     "run-checkpoint-v1": "run_checkpoint.v1.json",
     "mention-proposals-v1": "mention_proposals.v1.json",
     "mention-proposal-diagnostics-v1": "mention_proposal_diagnostics.v1.json",

@@ -11,7 +11,9 @@ from __future__ import annotations
 from vs_archive_people.artifacts.io import (
     IDENTITY_REVIEW_PACKAGE_SCHEMA,
     RESOLUTION_REPORT_SCHEMA,
+    RESOLUTION_REPORT_V2_SCHEMA,
     ArtifactError,
+    UnsupportedSchemaVersionError,
     require_object,
 )
 from vs_archive_people.artifacts.provenance import (
@@ -101,8 +103,14 @@ def build_review_package(
     resolution_report_file_sha256: str,
     created_at: str | None = None,
 ) -> dict:
+    document = require_object(resolution_report, "resolution report")
+    if document.get("schema_version") == RESOLUTION_REPORT_V2_SCHEMA:
+        raise UnsupportedSchemaVersionError(
+            "review-package reads resolution-report-v1; "
+            "resolution-report-v2 requires review-v2"
+        )
     report = verify_generated_artifact(
-        require_object(resolution_report, "resolution report"),
+        document,
         RESOLUTION_REPORT_SCHEMA,
         "resolution report",
     )
