@@ -67,7 +67,19 @@ python -m vs_archive_people.cli checkpoint \
 
 `freeze-evidence` does not find person names. It validates the loose mention-proposal list and publishes the evidence package. `mention_key` is a run-local label such as `M0001`. `mention_fingerprint` is the durable SHA-256 of the source position. See `docs/contracts.md`.
 
-`package-mention-proposals` publishes `mention-proposals-v1` from human geometry. It is not a checkpoint step and it does not call a provider. `freeze-evidence` does not read that file. Automated mention finding is not implemented.
+`package-mention-proposals` publishes `mention-proposals-v1` from human geometry. It is not a checkpoint step and it does not call a provider. `freeze-evidence` does not read that file.
+
+`find-mentions` publishes the same `mention-proposals-v1` artifact for a whole discovery selection. It is not a checkpoint step. A semantic detector proposes source surfaces, and a deterministic detector adds exact accepted names. The command assigns no production identity. Rejected, suppressed, and conflicting candidates go to `mention-proposal-diagnostics-v1`, which freeze does not read. If the proposal file is published and the sidecar write fails, the proposal stays and the command exits nonzero.
+
+```bash
+python -m vs_archive_people.cli find-mentions \
+  --documents data/document_text_snapshot.json \
+  --discovery runs/discovery.json \
+  --identity data/identity_snapshot.json \
+  --run-id run-001 \
+  --output runs/mention-proposals.json \
+  --diagnostics runs/mention-proposal-diagnostics.json
+```
 
 ```bash
 python -m vs_archive_people.cli package-mention-proposals \

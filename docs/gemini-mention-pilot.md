@@ -2,6 +2,8 @@
 
 This is an experiment. It is not an official pipeline step, not a checkpoint step, and not a versioned artifact.
 
+The official command is `find-mentions`. It publishes `mention-proposals-v1` for a whole discovery selection and may also write `mention-proposal-diagnostics-v1`. This pilot stays available for comparison. It still writes `GEMINI_MENTION_PILOT_NOT_ARTIFACT`, still has no `schema_version`, and still is not a freeze input. Official proposals are not fed to v1 freeze.
+
 `RUN_STEPS` stays `discover -> freeze-evidence -> resolve -> review`. This pilot does not emit `mention-proposals-v1`, does not freeze evidence, and does not resolve identity.
 
 ## What Gemini may do

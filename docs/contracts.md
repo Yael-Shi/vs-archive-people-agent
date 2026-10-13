@@ -72,7 +72,7 @@ An item is selected when its id is absent from the prior checkpoint `processed_i
 
 File: `src/vs_archive_people/schemas/mention_proposals.v1.json`.
 
-Written by `package-mention-proposals`. This is a generated artifact. It uses the same provenance, logical-hash, and atomic no-clobber publication rules as the other generated artifacts. Automated `find-mentions` is not implemented. `freeze-evidence` does not read this file. The v1 loose proposal list remains the freeze input.
+Written by `package-mention-proposals` or `find-mentions`. This is a generated artifact. It uses the same provenance, logical-hash, and atomic no-clobber publication rules as the other generated artifacts. `freeze-evidence` does not read this file. The v1 loose proposal list remains the freeze input. Official proposals must not be fed to v1 freeze.
 
 Required top-level fields:
 
@@ -89,7 +89,7 @@ Required top-level fields:
 
 There is no `diagnostics` field. Undeclared fields are rejected.
 
-Each detector has non-empty `id`, `role`, `implementation`, and `version`. `id` values are unique in the file. `role` is any non-empty string. Optional `reproducibility` is an object whose values are non-empty strings. The human packager writes one detector: `id` `human-authored`, `role` `human`, `implementation` `manual`, `version` `1`.
+Each detector has non-empty `id`, `role`, `implementation`, and `version`. `id` values are unique in the file. `role` is any non-empty string. Optional `reproducibility` is an object whose values are non-empty strings. The human packager writes one detector: `id` `human-authored`, `role` `human`, `implementation` `manual`, `version` `1`. `find-mentions` writes two detectors: `semantic-surface` (`role` `semantic`, `implementation` `gemini-3.8-flash`, `version` `1`, `reproducibility.prompt_sha256`) and `known-name` (`role` `deterministic`, `implementation` `exact-literal`, `version` `1`). Mention rows reference those ids. They do not carry a provider payload.
 
 Each mention has `archive_item_id`, `evidence_source`, `exact_mention`, `start_offset`, `end_offset`, `evidence_snippet`, `name_surface`, `name_start_offset`, `name_end_offset`, `title_surface`, `title_start_offset`, `title_end_offset`, `surface_kind`, `detector_ids`, and `known_name_match_quality`.
 
@@ -118,6 +118,47 @@ The command verifies the discovery artifact and its logical hash, requires the s
 
 Success prints `status`, the output file hash, the logical hash, `schema_version`, and the mention count. An existing destination fails. A blocked command leaves no partial destination.
 
+`find-mentions` reads the document-text snapshot, the discovery selection, and the identity snapshot. It requires the same `run_id` as discovery. It walks every selected displayed body, then publishes one proposal for the complete selection. A body with zero mentions is success. A required semantic-provider failure before publication publishes no proposal and does not attempt the sidecar. Semantic requests split at 20,000 code points of segment text, and each later batch repeats the previous batch's last segment so a one-line cross-line mention at that boundary is visible. Identical outer spans from that overlap become one proposal row. A provider failure on a later batch still publishes nothing.
+
+```text
+find-mentions \
+  --documents data/document_text_snapshot.json \
+  --discovery runs/discovery.json \
+  --identity data/identity_snapshot.json \
+  --run-id run-001 \
+  --output runs/mention-proposals.json \
+  --diagnostics runs/mention-proposal-diagnostics.json
+```
+
+The semantic detector proposes source surfaces. Local code aligns them to Python code-point offsets in the unmodified body. The known-name detector searches accepted `Person.name` and accepted `PersonAlias.name` as exact literals. It publishes `EXACT_BOUNDARY` and a safe `PREFIXED` proclitic peel. `EMBEDDED` is diagnostic only. Neither detector assigns `person_id`.
+
+Consolidation is per archive item and evidence source. The same outer span merges `detector_ids`. Two exact splits of that span publish neither row and record `SPLIT_CONFLICT`. Exactly one titled outer absorbs an inner span at its name offsets. Several titled outers keep every valid span and record `ABSORB_AMBIGUOUS`. Other overlapping spans stay. Published rows are ordered by archive item, evidence source, and outer offsets.
+
+## mention-proposal-diagnostics-v1
+
+File: `src/vs_archive_people/schemas/mention_proposal_diagnostics.v1.json`.
+
+Written by `find-mentions` after `mention-proposals-v1` is published. This is a generated artifact with its own provenance and logical hash. It is not an input to freeze, resolve, or review. Changing it cannot change the proposal logical hash.
+
+Required fields:
+
+- `schema_version` — `mention-proposal-diagnostics-v1`
+- `run_id` — the same run as the proposal
+- `artifact_created_at`, `producer`, `logical_content_sha256`
+- `mention_proposals_logical_sha256` — semantic parent. Inside the logical hash
+- `mention_proposals_file_sha256` — audit hash of the published proposal. Outside the logical hash
+- `rejected`, `suppressed`, `conflicts`
+
+Each row has `archive_item_id`, `evidence_source`, `surface`, `reason`, and `segment_id` (or null). Offsets are present only after a local slice check succeeded. Conflict rows always have offsets.
+
+`rejected` reasons: `UNKNOWN_SEGMENT`, `EMPTY_SURFACE`, `SURFACE_NOT_IN_SEGMENT`, `END_SEGMENT_NOT_NEXT_LINE`, `AMBIGUOUS_REPEATED_SURFACE`, `OCCURRENCE_OUT_OF_RANGE`, `OFFSET_INVARIANT_FAILED`, `TITLE_SPLIT_UNRESOLVED`, `UNSAFE_NAME_SPLIT`, `NAME_SURFACE_NOT_IN_FULL`, `AMBIGUOUS_NAME_SURFACE`, `TITLE_SURFACE_NOT_IN_FULL`, `AMBIGUOUS_TITLE_SURFACE`, `TITLE_NAME_OVERLAP`.
+
+`suppressed` reasons: `TITLE_OR_ROLE_WITHOUT_NAME`, `PLACE_OR_INSTITUTION_CONTEXT`, `EMBEDDED_KNOWN_NAME`.
+
+`conflicts` reasons: `SPLIT_CONFLICT`, `ABSORB_AMBIGUOUS`.
+
+The sidecar does not store raw provider JSON, prompt text, an API key, token counts, or response bodies. There is no two-file transaction. If the proposal link succeeds and the sidecar link fails, the proposal stays. Stdout is `status` `PROPOSAL_PUBLISHED`, `error_code` `DIAGNOSTICS_PUBLICATION_FAILED`, the proposal path, both proposal hashes, and `diagnostics_published` false. The process exits nonzero. An existing proposal destination fails before publication and writes no sidecar.
+
 ## evidence-package-v1
 
 File: `src/vs_archive_people/schemas/evidence_package.v1.json`.
@@ -143,7 +184,7 @@ proposed_identity_action   optional, MERGE | CANONICAL_NAME_CHANGE
 confidence                 optional integer 0..100
 ```
 
-`start_offset` and `end_offset` are zero-based offsets into the displayed body named by `evidence_source`. `freeze-evidence` is the consumer of those records. It assigns `mention_key`, `mention_fingerprint`, and `occurrence_index`. A caller `occurrence_index`, `mention_key`, or `mention_fingerprint` is not identity. The finder must not assign production identity, approve a new Person, or write production data. Automated `find-mentions` is not implemented. The human command `package-mention-proposals` publishes `mention-proposals-v1` instead of this loose list. That official file is not a v1 freeze input.
+`start_offset` and `end_offset` are zero-based offsets into the displayed body named by `evidence_source`. `freeze-evidence` is the consumer of those records. It assigns `mention_key`, `mention_fingerprint`, and `occurrence_index`. A caller `occurrence_index`, `mention_key`, or `mention_fingerprint` is not identity. The finder must not assign production identity, approve a new Person, or write production data. `find-mentions` publishes `mention-proposals-v1` and does not feed that file to this command. The human command `package-mention-proposals` publishes the same official file from geometry. That official file is not a v1 freeze input.
 
 ## resolution-report-v1
 
@@ -194,7 +235,7 @@ Published artifacts are checked with Draft 2020-12 against the schema documents 
 
 `checkpoint` continuation stays on the checkpoint's `run_id`. The command refuses a `--run-id` that differs. `--processed-from` refuses an evidence package whose `run_id` differs from `--run-id`. Discovery may read a review-complete checkpoint from another run.
 
-Contract failures use these `error_code` values: `MALFORMED_ARTIFACT`, `ARTIFACT_READ_ERROR`, `ARTIFACT_EXISTS`, `INPUT_HASH_CHANGED`, `MISSING_BOUND_INPUT`, `UNSUPPORTED_SCHEMA_VERSION`, `LOGICAL_HASH_MISMATCH`, `RUN_ID_MISMATCH`, and `INCOMPLETE_PRIOR_CHECKPOINT`. Invalid JSON is `MALFORMED_ARTIFACT`. A missing, unreadable, or non-UTF-8 input file is `ARTIFACT_READ_ERROR`.
+Contract failures use these `error_code` values: `MALFORMED_ARTIFACT`, `ARTIFACT_READ_ERROR`, `ARTIFACT_EXISTS`, `INPUT_HASH_CHANGED`, `MISSING_BOUND_INPUT`, `UNSUPPORTED_SCHEMA_VERSION`, `LOGICAL_HASH_MISMATCH`, `RUN_ID_MISMATCH`, `INCOMPLETE_PRIOR_CHECKPOINT`, `FIND_MENTIONS_CONFIGURATION`, `FIND_MENTIONS_PROVIDER`, and `DIAGNOSTICS_PUBLICATION_FAILED`. Invalid JSON is `MALFORMED_ARTIFACT`. A missing, unreadable, or non-UTF-8 input file is `ARTIFACT_READ_ERROR`. `DIAGNOSTICS_PUBLICATION_FAILED` is not a `BLOCKED` result: the proposal file remains, and stdout reports `PROPOSAL_PUBLISHED`.
 
 ## Provenance and hashes
 

@@ -102,7 +102,7 @@ Finding names and freezing evidence are different responsibilities.
 
 ### Consequences
 
-A future finder emits proposals. This slice does not implement automated finding. ADR-034 adds the generated `mention-proposals-v1` artifact and the human packager. `freeze-evidence` still consumes the loose proposal list.
+A future finder emits proposals. ADR-034 adds the generated `mention-proposals-v1` artifact and the human packager. ADR-035 adds automated `find-mentions` and the diagnostics sidecar. `freeze-evidence` still consumes the loose proposal list.
 
 ## ADR-007 — Title is metadata
 
@@ -590,4 +590,25 @@ Detection and evidence freezing are different responsibilities (ADR-006). A huma
 
 ### Consequences
 
-`package-mention-proposals` is outside `RUN_STEPS` and does not call a provider. Published mention rows are ordered by archive item, evidence source, and outer offsets before the logical hash is stamped. Artifact validation rejects a duplicate outer span, more than one line break in an outer span, and a `surface_kind` that disagrees with the title slice. `freeze-evidence` does not accept `mention-proposals-v1`. Automated finding remains unimplemented. The pilot command and `GEMINI_MENTION_PILOT_NOT_ARTIFACT` are unchanged.
+`package-mention-proposals` is outside `RUN_STEPS` and does not call a provider. Published mention rows are ordered by archive item, evidence source, and outer offsets before the logical hash is stamped. Artifact validation rejects a duplicate outer span, more than one line break in an outer span, and a `surface_kind` that disagrees with the title slice. `freeze-evidence` does not accept `mention-proposals-v1`. The pilot command and `GEMINI_MENTION_PILOT_NOT_ARTIFACT` are unchanged. ADR-035 adds the automated producer and the diagnostics sidecar. v1 freeze still does not read official proposals.
+
+## ADR-035 — Official find-mentions publishes proposals and a diagnostic sidecar
+
+- Date: 2026-10-13
+- Status: Accepted
+
+### Decision
+
+`find-mentions` is the official automated producer of `mention-proposals-v1`. It stays outside `RUN_STEPS`. One successful run publishes one proposal for the whole discovery selection. The semantic detector proposes source surfaces behind a provider-neutral interface. The first implementation is Gemini 3.8 Flash, with structured output, `ThinkingLevel.LOW`, default decoding, SDK retries of three attempts, a 120 second timeout, and no tools. The known-name detector searches accepted production names as exact literals and publishes `EXACT_BOUNDARY` and a safe `PREFIXED` peel. `EMBEDDED` is diagnostic only. Mention rows reference `detector_ids`. They carry no provider payload and no `person_id`.
+
+`mention-proposal-diagnostics-v1` is a separate generated artifact. It binds the proposal logical hash and the proposal file hash, and it records rejected, suppressed, and conflict rows. Freeze does not read it. There is no two-file transaction. A failure before proposal publication publishes nothing. If the proposal link succeeds and the sidecar link fails, the proposal stays and the CLI reports `PROPOSAL_PUBLISHED` with `DIAGNOSTICS_PUBLICATION_FAILED`.
+
+Same-span detector hits merge. Conflicting exact splits publish neither row. Exactly one titled outer absorbs an inner name span. Several titled outers keep every valid span. A provider failure on any required body publishes no partial selection. `pilot-find-mentions` stays available. v1 freeze, resolution, review, and `run-checkpoint-v1` are unchanged.
+
+### Rationale
+
+The pilot showed that hybrid surface detection is usable, and the proposal contract from ADR-034 is the official shape of that result. Detection is still not evidence. Putting it in `RUN_STEPS`, or folding diagnostics into the proposal logical body, would make review-complete discovery memory depend on a model call and on rows freeze does not use.
+
+### Consequences
+
+The command reads a document-text snapshot, a discovery selection, and an identity snapshot. It writes no production data and creates no alias or merge. Official proposals are not a v1 freeze input. Evidence-package-v2, resolution-report-v2, identity-review-package-v2, and run-checkpoint-v2 remain unimplemented. See `docs/contracts.md`.
