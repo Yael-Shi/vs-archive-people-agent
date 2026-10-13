@@ -219,7 +219,7 @@ Each evidence row stores `mention_key`, `mention_fingerprint`, `occurrence_index
 
 Occurrence identity is unchanged from v1. `mention_fingerprint` is the SHA-256 of canonical JSON for `archive_item_id`, `evidence_source`, `source_text_sha256` (lowercase), `start_offset`, and `end_offset`. It does not include `name_surface`, title text, `detector_ids`, or model metadata. `mention_key` is assigned in order of archive item, evidence source, and outer offsets. `occurrence_index` is display order inside each `(archive_item_id, evidence_source)` from those offsets. Equivalent proposal rows in a different JSON order produce the same evidence mention rows. The proposal logical hash still follows the supplied artifact, so two proposal files that differ only by mention order have different parent hashes and different package logical hashes even when the mention rows match. Producers that sort before stamping, as `package-mention-proposals` does, produce equivalent package logical hashes.
 
-`production_write_performed` is false. Selected items are stored in the same shape as v1. Resolution, review, and `run-checkpoint-v1` do not read this package.
+`production_write_performed` is false. Selected items are stored in the same shape as v1. v1 `resolve`, review, and `run-checkpoint-v1` do not read this package. `resolve-v2` is the consumer. See resolution-report-v2 below.
 
 ## resolution-report-v1
 
@@ -237,6 +237,40 @@ Resolution copies `run_id` from the evidence package. Each resolution copies `ev
 `confidence_approves_identity` and `local_candidates_are_production_identity` are false. `photo_person_created` is false.
 
 `inferred_alias_proposal` is true only when the proposal sets `propose_alias` and the normalized mention is not already that person's canonical name or alias. A unique alias hit is `matched_via = person_alias` and is not an inferred alias.
+
+## resolution-report-v2
+
+File: `src/vs_archive_people/schemas/resolution_report.v2.json`.
+
+Written by `resolve-v2`. This command is outside `RUN_STEPS`. It does not replace v1 `resolve`. Inputs are `evidence-package-v2`, the identity snapshot, the run id, and the output path. There is no local-candidates argument and no automatic migration from v1 evidence.
+
+```text
+resolve-v2 \
+  --evidence runs/evidence-v2.json \
+  --identity data/identity_snapshot.json \
+  --run-id run-001 \
+  --output runs/resolution-v2.json
+```
+
+The lookup string is `name_surface`. `exact_mention` is copied and is not matched. Resolve does not re-slice source text, strip a title, or peel a Hebrew proclitic. A change that touches only `title_surface` does not change the lookup string. Passing `evidence-package-v1` is `UNSUPPORTED_SCHEMA_VERSION`. v1 `resolve` still requires `evidence-package-v1` and still fails closed on `evidence-package-v2`.
+
+The package must be a generated `evidence-package-v2` artifact. Resolve recomputes its logical hash and requires `run_id` to equal the active run. A logical-hash mismatch is `LOGICAL_HASH_MISMATCH`. A run-id mismatch is `RUN_ID_MISMATCH`. A schema failure inside that version is `MALFORMED_ARTIFACT`.
+
+Classifications:
+
+- `DETERMINISTIC_EXISTING_PERSON` — `name_surface` hits exactly one production person
+- `AMBIGUOUS` — more than one production person
+- `NEW_PERSON_CANDIDATE` — no production person
+
+`NOT_A_PERSON` is not a v2 classification. The schema does not list it. Detector fields do not choose the class. `known-name` provenance does not assign `person_id`.
+
+Each resolution copies `mention_key`, `mention_fingerprint`, `archive_item_id`, `evidence_source`, `source_text_sha256`, `exact_mention`, `start_offset`, `end_offset`, `evidence_snippet`, `occurrence_index`, `name_surface`, `name_start_offset`, `name_end_offset`, `title_surface`, `title_start_offset`, `title_end_offset`, `surface_kind`, `detector_ids`, and `known_name_match_quality` from the evidence row. It also stores `matched_person_ids`, `matched_person_name`, `matched_via`, `matched_alias_id`, `stable_keys`, `review_status` `PENDING`, and `identity_is_production`. A unique match stores that person's canonical name and stable keys. Several matches store every matched person id, in index order, and the sorted stable keys. `matched_person_name` is null unless the match is unique. `identity_is_production` is true only for `DETERMINISTIC_EXISTING_PERSON`.
+
+Rows are ordered by `mention_key`. Shuffling the evidence mention array does not change that row order. The evidence logical hash still follows the supplied artifact, so a different mention order is a different parent and a different report logical hash even when the resolution rows match.
+
+Logical parent: `evidence_package_logical_sha256`. Audit-only physical hashes: `evidence_package_file_sha256` and `identity_snapshot_file_sha256`. Both names end in `_file_sha256`, so the existing logical-hash exclusion rule leaves them out of the report logical body. The identity snapshot is an external file, not a generated logical parent. There is no `local_candidates_file_sha256`. v1 local candidates only flagged same-run overlap for review. They are not production identity, and this phase has no review v2 consumer, so v2 does not invent that input.
+
+`production_write_performed` and `photo_person_created` are false. The command reads the identity snapshot and publishes the report. It does not create a Person, alias, merge, or canonical-name change, and it does not approve identity. `review-package` still reads only `resolution-report-v1`.
 
 ## identity-review-package-v1
 
@@ -274,7 +308,7 @@ Contract failures use these `error_code` values: `MALFORMED_ARTIFACT`, `ARTIFACT
 
 ## Provenance and hashes
 
-Generated artifacts are discovery selections, mention proposals, mention-proposal diagnostics, evidence packages (`evidence-package-v1` and `evidence-package-v2`), resolution reports, identity review packages, and run checkpoints. Each records:
+Generated artifacts are discovery selections, mention proposals, mention-proposal diagnostics, evidence packages (`evidence-package-v1` and `evidence-package-v2`), resolution reports (`resolution-report-v1` and `resolution-report-v2`), identity review packages, and run checkpoints. Each records:
 
 - `artifact_created_at` — UTC time `YYYY-MM-DDThh:mm:ssZ`
 - `producer.name` — `vs-archive-people`
@@ -288,7 +322,7 @@ Generated artifacts are discovery selections, mention proposals, mention-proposa
 
 `logical_content_sha256` is the SHA-256 of canonical JSON (`sort_keys`, compact separators, UTF-8) after dropping publication metadata and audit-only file hashes. Excluded keys are `artifact_created_at`, `producer`, `logical_content_sha256`, and any top-level key ending in `_file_sha256`. Keys ending in `_logical_sha256` stay in the logical body. Rebuilding a parent at a new timestamp changes its file hash and leaves its logical hash unchanged. A child that binds the parent logical hash therefore keeps the same logical hash and can still store the two different parent file hashes for audit.
 
-Consumers of generated artifacts validate the schema, recompute that logical hash, and refuse a mismatch as `LOGICAL_HASH_MISMATCH`. That check runs when freeze-evidence reads discovery, when `freeze-evidence-v2` reads discovery and `mention-proposals-v1`, when `package-mention-proposals` reads discovery, when resolution reads an evidence package, when review reads a resolution report, and when discovery or checkpoint continuation reads a run checkpoint. External `document-text-snapshot-v1` and `identity-snapshot-v1` files are not generated artifacts and are bound only by file hash. `mention-proposals-v1` is validated when it is published. No later v1 step reads it. `freeze-evidence-v2` is the first consumer, and it is outside `RUN_STEPS`. The checkpoint schema version map still records `evidence-package-v1`.
+Consumers of generated artifacts validate the schema, recompute that logical hash, and refuse a mismatch as `LOGICAL_HASH_MISMATCH`. That check runs when freeze-evidence reads discovery, when `freeze-evidence-v2` reads discovery and `mention-proposals-v1`, when `package-mention-proposals` reads discovery, when v1 resolution reads an evidence package, when `resolve-v2` reads `evidence-package-v2`, when review reads a resolution report, and when discovery or checkpoint continuation reads a run checkpoint. External `document-text-snapshot-v1` and `identity-snapshot-v1` files are not generated artifacts and are bound only by file hash. `mention-proposals-v1` is validated when it is published. No later v1 step reads it. `freeze-evidence-v2` is its freeze consumer, and it is outside `RUN_STEPS`. The checkpoint schema version map still records `evidence-package-v1` and `resolution-report-v1`. `resolve-v2` is outside that map.
 
 The physical file hash is the SHA-256 of the indented JSON bytes that were published. `write_json_atomic` returns that hash. It changes when the timestamp or producer version changes, even when the logical hash does not.
 

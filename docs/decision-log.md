@@ -611,7 +611,7 @@ The pilot showed that hybrid surface detection is usable, and the proposal contr
 
 ### Consequences
 
-The command reads a document-text snapshot, a discovery selection, and an identity snapshot. It writes no production data and creates no alias or merge. Official proposals are not a v1 freeze input. Resolution-report-v2, identity-review-package-v2, and run-checkpoint-v2 remain unimplemented. ADR-036 adds evidence-package-v2. See `docs/contracts.md`.
+The command reads a document-text snapshot, a discovery selection, and an identity snapshot. It writes no production data and creates no alias or merge. Official proposals are not a v1 freeze input. Identity-review-package-v2 and run-checkpoint-v2 remain unimplemented. ADR-036 adds evidence-package-v2. ADR-037 adds resolution-report-v2. See `docs/contracts.md`.
 
 ## ADR-036 — evidence-package-v2 is the freeze trust boundary
 
@@ -630,4 +630,29 @@ ADR-006 separates finding names from freezing evidence. ADR-034 and ADR-035 publ
 
 ### Consequences
 
-`evidence-package-v2` binds discovery and the proposal by logical hash, and records the document, discovery, and proposal file hashes for audit under the existing `*_file_sha256` exclusion rule. A wrong generation fails closed. v1 resolution, review, and checkpoints do not read the v2 package. See `docs/contracts.md`.
+`evidence-package-v2` binds discovery and the proposal by logical hash, and records the document, discovery, and proposal file hashes for audit under the existing `*_file_sha256` exclusion rule. A wrong generation fails closed. v1 resolution, review, and checkpoints do not read the v2 package. ADR-037 adds `resolve-v2`. Review v2 and checkpoint v2 remain unimplemented. See `docs/contracts.md`.
+
+## ADR-037 — resolution-report-v2 resolves verified name_surface without writing production
+
+- Date: 2026-10-13
+- Status: Accepted
+
+### Decision
+
+`resolve-v2` publishes `resolution-report-v2` from a verified `evidence-package-v2` and an identity snapshot. It is outside `RUN_STEPS`. v1 `resolve` still reads only `evidence-package-v1` and still matches `exact_mention`. There is no automatic migration between the two commands.
+
+Evidence v2 is already the source trust boundary. Resolve v2 does not re-slice displayed text, strip a title, or peel a Hebrew proclitic. The identity lookup string is the frozen `name_surface`. `exact_mention`, title offsets, and prefix geometry stay on the resolution row as evidence and display context.
+
+Classifications are `DETERMINISTIC_EXISTING_PERSON`, `AMBIGUOUS`, and `NEW_PERSON_CANDIDATE`. `NOT_A_PERSON` is not a v2 state. Non-person candidates were suppressed before evidence publication. `detector_ids`, `surface_kind`, and `known_name_match_quality` are copied for review. They do not force a production match, override ambiguity, create a person, or approve identity. A known-name detector found a literal surface. It did not assign `person_id`.
+
+The report binds the evidence package by logical hash and records the evidence file hash and the identity snapshot file hash for audit. Those file hashes use the existing `*_file_sha256` exclusion rule. The identity snapshot is not a generated logical parent. Local candidates are not a v2 input. In v1 they only set `local_candidate_overlap` for review; they never become production identity, and identity-review-package-v2 is not implemented. `production_write_performed` is false.
+
+`RUN_STEPS` stays `discover -> freeze-evidence -> resolve -> review`. This phase does not implement identity-review-package-v2, review v2, run-checkpoint-v2, checkpoint migration, v1 retirement, or any apply or write workflow.
+
+### Rationale
+
+ADR-036 freezes a name slice that is already checked against the displayed body. Matching the outer mention again would treat a title or a proclitic as part of the person's name, which the freeze step has already separated. A second command keeps v1 callers on `exact_mention` and makes the lookup field explicit. Human review is still required before any future production write.
+
+### Consequences
+
+`resolve-v2` fails closed on `evidence-package-v1`, a logical-hash mismatch, or a different `run_id`. v1 `resolve` fails closed on `evidence-package-v2`. Rows are ordered by `mention_key`. One production person is deterministic, several are ambiguous, and none is a new-person candidate. No Person, alias, merge, or canonical name is created or changed. See `docs/contracts.md`.
