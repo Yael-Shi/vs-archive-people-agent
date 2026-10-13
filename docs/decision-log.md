@@ -677,3 +677,26 @@ ADR-037 can name exactly one production person and still must not treat that mat
 ### Consequences
 
 `review-v2` fails closed on `resolution-report-v1`, a logical-hash mismatch, a different `run_id`, a duplicate mention identity, or a resolution row whose match fields disagree with its classification. v1 review of a valid `resolution-report-v1` is unchanged, including `auto_resolution_proposals`. `RUN_STEPS` stays `discover -> freeze-evidence -> resolve -> review`. See `docs/contracts.md`.
+
+## ADR-039 — run-checkpoint-v2 preserves one generation per run
+
+- Date: 2026-10-13
+- Status: Accepted
+
+### Decision
+
+`checkpoint-v2` publishes `run-checkpoint-v2`. `RUN_STEPS` stays `discover -> freeze-evidence -> resolve -> review` for v1 and v2. Those strings are the only checkpoint step names. `checkpoint` still publishes and resumes `run-checkpoint-v1`.
+
+A run has one generation. The schema-version map recorded at `discover` is copied forward. A v1 checkpoint does not accept `evidence-package-v2`, `resolution-report-v2`, or `identity-review-package-v2`. A v2 checkpoint does not accept the v1 counterparts. Partial checkpoints resume only inside the generation they started with. There is no migration.
+
+A completed checkpoint of either generation may seed discovery for a new run when `completed_steps` equals `RUN_STEPS`. The new run has its own `run_id`. Reading a completed v1 checkpoint as that memory does not resume the old run as v2.
+
+Completing `review` means the identity-review package was published. For v2 that package remains a pending queue. The checkpoint does not record human approval, apply authorization, or a production write. Mention proposals stay outside both schema maps.
+
+### Rationale
+
+The v2 artifacts are a second contract, not a replacement of an in-flight v1 run. Encoding generation in the step names would make `RUN_STEPS` describe products instead of the workflow. Encoding it only in the checkpoint schema keeps resume, discovery memory, and the v1 command unambiguous.
+
+### Consequences
+
+`published_schema_versions()` remains the v1 map. The v2 map is requested explicitly. Same-run resume of the other generation is `UNSUPPORTED_SCHEMA_VERSION`. An incomplete prior checkpoint of either generation is `INCOMPLETE_PRIOR_CHECKPOINT`. See `docs/contracts.md`.

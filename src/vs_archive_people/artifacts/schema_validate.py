@@ -27,6 +27,7 @@ SCHEMA_FILES = {
     "identity-review-package-v1": "identity_review_package.v1.json",
     "identity-review-package-v2": "identity_review_package.v2.json",
     "run-checkpoint-v1": "run_checkpoint.v1.json",
+    "run-checkpoint-v2": "run_checkpoint.v2.json",
     "mention-proposals-v1": "mention_proposals.v1.json",
     "mention-proposal-diagnostics-v1": "mention_proposal_diagnostics.v1.json",
 }
@@ -168,9 +169,21 @@ def load_schema(schema_version: str) -> dict:
     return document
 
 
-def published_schema_versions() -> dict[str, str]:
-    """Version map stored on a checkpoint, taken from the checkpoint schema."""
-    block = load_schema("run-checkpoint-v1")["properties"]["schema_versions"]
+def published_schema_versions(
+    checkpoint_schema: str = "run-checkpoint-v1",
+) -> dict[str, str]:
+    """Version map stored on a checkpoint, taken from that checkpoint schema.
+
+    The default map is ``run-checkpoint-v1``. Pass ``run-checkpoint-v2`` for a
+    v2 run. The two maps are not interchangeable.
+    """
+    if checkpoint_schema not in {"run-checkpoint-v1", "run-checkpoint-v2"}:
+        from vs_archive_people.artifacts.io import UnsupportedSchemaVersionError
+
+        raise UnsupportedSchemaVersionError(
+            f"unsupported checkpoint schema {checkpoint_schema!r}"
+        )
+    block = load_schema(checkpoint_schema)["properties"]["schema_versions"]
     versions = {}
     for name in block["required"]:
         versions[name] = block["properties"][name]["const"]

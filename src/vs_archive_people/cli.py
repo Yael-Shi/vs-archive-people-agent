@@ -1,6 +1,9 @@
 """Command line for the read-only people slice.
 
 Pipeline commands: discover, freeze-evidence, resolve, review-package, checkpoint.
+``checkpoint`` records ``run-checkpoint-v1``. ``checkpoint-v2`` records
+``run-checkpoint-v2``. Both use the same logical step names. A run does not
+change generation. Completing review records that the review package exists.
 ``freeze-evidence`` reads a loose proposal list and publishes evidence-package-v1.
 ``freeze-evidence-v2`` reads mention-proposals-v1 and publishes evidence-package-v2.
 ``resolve`` reads evidence-package-v1. ``resolve-v2`` reads evidence-package-v2
@@ -23,9 +26,11 @@ import sys
 from pathlib import Path
 
 from vs_archive_people.artifacts.io import (
-    EVIDENCE_PACKAGE_SCHEMA,
     MENTION_PROPOSALS_SCHEMA,
+    RUN_CHECKPOINT_SCHEMA,
+    RUN_CHECKPOINT_V2_SCHEMA,
     ArtifactError,
+    InputHashChangedError,
     RunIdMismatchError,
     UnsupportedSchemaVersionError,
     read_json,
@@ -47,7 +52,10 @@ from vs_archive_people.identity_review.package_v2 import build_review_package_v2
 from vs_archive_people.resolution.match import build_resolution_report
 from vs_archive_people.resolution.match_v2 import build_resolution_report_v2
 from vs_archive_people.resolution.snapshot_index import build_index
-from vs_archive_people.artifacts.schema_validate import step_chain
+from vs_archive_people.artifacts.schema_validate import (
+    published_schema_versions,
+    step_chain,
+)
 from vs_archive_people.mention_pilot.gemini import GeminiMentionDetector
 from vs_archive_people.mention_proposals.package import package_mention_proposals
 from vs_archive_people.mention_pilot.run import (
@@ -55,6 +63,7 @@ from vs_archive_people.mention_pilot.run import (
     run_mention_pilot,
 )
 from vs_archive_people.runs.checkpoint import (
+    STEP_OUTPUT_ROLES,
     append_step,
     initial_checkpoint,
     processed_items_from_evidence,
@@ -88,8 +97,8 @@ def _local_candidates(path: Path | None) -> list[dict] | None:
     raise ArtifactError("local candidates must be a list or an object with candidates")
 
 
-def _bindings(values: list[str]) -> dict[str, str]:
-    found: dict[str, str] = {}
+def _binding_paths(values: list[str]) -> dict[str, Path]:
+    found: dict[str, Path] = {}
     for raw in values:
         if "=" not in raw:
             raise ArtifactError(f"expected name=path, got {raw!r}")
@@ -99,8 +108,12 @@ def _bindings(values: list[str]) -> dict[str, str]:
             raise ArtifactError(f"expected name=path, got {raw!r}")
         if binding_name in found:
             raise ArtifactError(f"duplicate binding name {binding_name!r}")
-        found[binding_name] = sha256_file(Path(path_value))
+        found[binding_name] = Path(path_value)
     return found
+
+
+def _bindings(values: list[str]) -> dict[str, str]:
+    return {name: sha256_file(path) for name, path in _binding_paths(values).items()}
 
 
 def command_discover(args: argparse.Namespace) -> int:
@@ -365,18 +378,93 @@ def command_package_mention_proposals(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_checkpoint(args: argparse.Namespace) -> int:
+def _step_artifacts(
+    args: argparse.Namespace, checkpoint_schema: str, record_paths: dict[str, Path]
+) -> dict[str, dict]:
+    """Load a generation artifact when this step records one.
+
+    v1 still accepts a hash-only record. When the file is present, its schema
+    must match the checkpoint generation. v2 requires that file.
+    """
+    role = STEP_OUTPUT_ROLES.get(args.step)
+    if role is None:
+        return {}
+    expected = published_schema_versions(checkpoint_schema)[role]
+    path = record_paths.get(role)
+    if path is None:
+        if checkpoint_schema == RUN_CHECKPOINT_V2_SCHEMA:
+            raise ArtifactError(f"{args.step} requires a verified {expected} artifact")
+        return {}
+    document = read_json(path)
+    if not isinstance(document, dict):
+        raise ArtifactError(f"{role} must be a JSON object")
+    actual = document.get("schema_version")
+    if actual != expected:
+        raise UnsupportedSchemaVersionError(
+            f"{role} schema_version {actual!r} does not match "
+            f"{checkpoint_schema} contract {expected!r}"
+        )
+    return {role: document}
+
+
+def _processed_from(args: argparse.Namespace, checkpoint_schema: str):
+    if not args.processed_from:
+        return None
+    evidence = read_json(args.processed_from)
+    expected = published_schema_versions(checkpoint_schema)["evidence_package"]
+    if not isinstance(evidence, dict) or evidence.get("schema_version") != expected:
+        actual = evidence.get("schema_version") if isinstance(evidence, dict) else None
+        raise UnsupportedSchemaVersionError(
+            "processed evidence schema_version "
+            f"{actual!r} does not match {checkpoint_schema} contract {expected!r}"
+        )
+    verify_generated_artifact(evidence, expected, "evidence package")
+    if evidence.get("run_id") != args.run_id:
+        raise RunIdMismatchError(
+            "processed evidence run_id does not match checkpoint --run-id"
+        )
+    return processed_items_from_evidence(evidence)
+
+
+def _require_v2_processed_evidence_file(
+    args: argparse.Namespace,
+    checkpoint_schema: str,
+    outputs: dict[str, str],
+    bound: dict[str, dict],
+) -> None:
+    """v2 freeze must derive processed items from the recorded evidence file.
+
+    Schema, logical hash, and run id are checked before the file hashes are
+    compared. The comparison uses SHA-256 of the published bytes.
+    """
+    if checkpoint_schema != RUN_CHECKPOINT_V2_SCHEMA:
+        return
+    if args.step != "freeze-evidence" or not args.processed_from:
+        return
+    expected = published_schema_versions(checkpoint_schema)["evidence_package"]
+    recorded = bound.get("evidence_package")
+    recorded_hash = outputs.get("evidence_package")
+    if recorded is None or recorded_hash is None:
+        raise ArtifactError(f"freeze-evidence requires a verified {expected} artifact")
+    verify_generated_artifact(recorded, expected, "evidence package")
+    if recorded.get("run_id") != args.run_id:
+        raise RunIdMismatchError(
+            "evidence package run_id does not match checkpoint --run-id"
+        )
+    if sha256_file(args.processed_from) != recorded_hash:
+        raise InputHashChangedError(
+            "--processed-from must be the same evidence artifact recorded "
+            "as evidence_package for this freeze-evidence checkpoint"
+        )
+
+
+def _command_checkpoint(args: argparse.Namespace, checkpoint_schema: str) -> int:
+    record_paths = _binding_paths(args.record or [])
     inputs = _bindings(args.input or [])
-    outputs = _bindings(args.record or [])
-    processed = None
-    if args.processed_from:
-        evidence = read_json(args.processed_from)
-        verify_generated_artifact(evidence, EVIDENCE_PACKAGE_SCHEMA, "evidence package")
-        if evidence.get("run_id") != args.run_id:
-            raise RunIdMismatchError(
-                "processed evidence run_id does not match checkpoint --run-id"
-            )
-        processed = processed_items_from_evidence(evidence)
+    outputs = {name: sha256_file(path) for name, path in record_paths.items()}
+    bound = _step_artifacts(args, checkpoint_schema, record_paths)
+    processed = _processed_from(args, checkpoint_schema)
+    _require_v2_processed_evidence_file(args, checkpoint_schema, outputs, bound)
     if args.prior:
         checkpoint = append_step(
             read_json(args.prior),
@@ -384,6 +472,8 @@ def command_checkpoint(args: argparse.Namespace) -> int:
             input_hashes=inputs,
             output_hashes=outputs,
             processed_items=processed,
+            checkpoint_schema=checkpoint_schema,
+            bound_artifacts=bound or None,
         )
         if checkpoint["run_id"] != args.run_id:
             raise RunIdMismatchError("checkpoint run_id does not match --run-id")
@@ -394,10 +484,27 @@ def command_checkpoint(args: argparse.Namespace) -> int:
             input_hashes=inputs,
             output_hashes=outputs,
             processed_items=processed,
+            checkpoint_schema=checkpoint_schema,
         )
     digest = write_json_atomic(args.output, checkpoint)
-    _ok({"output_sha256": digest, "completed_steps": checkpoint["completed_steps"]})
+    _ok(
+        {
+            "output_sha256": digest,
+            "schema_version": checkpoint["schema_version"],
+            "completed_steps": checkpoint["completed_steps"],
+        }
+    )
     return 0
+
+
+def command_checkpoint(args: argparse.Namespace) -> int:
+    """Record the next v1 checkpoint. Does not approve or apply identity."""
+    return _command_checkpoint(args, RUN_CHECKPOINT_SCHEMA)
+
+
+def command_checkpoint_v2(args: argparse.Namespace) -> int:
+    """Record the next v2 checkpoint. Review completion is not human approval."""
+    return _command_checkpoint(args, RUN_CHECKPOINT_V2_SCHEMA)
 
 
 def _ok(payload: dict) -> None:
@@ -521,7 +628,28 @@ def build_parser() -> argparse.ArgumentParser:
     finder.add_argument("--diagnostics", type=Path, required=True)
     finder.set_defaults(func=command_find_mentions)
 
-    checkpoint = commands.add_parser("checkpoint")
+    _add_checkpoint_command(
+        commands,
+        "checkpoint",
+        command_checkpoint,
+        "Publish the next run-checkpoint-v1 file. Same-run resume stays on v1.",
+    )
+    _add_checkpoint_command(
+        commands,
+        "checkpoint-v2",
+        command_checkpoint_v2,
+        (
+            "Publish the next run-checkpoint-v2 file. Logical steps stay "
+            "discover, freeze-evidence, resolve, and review. "
+            "Completing review records the pending review package. "
+            "It does not approve identities or authorize apply."
+        ),
+    )
+    return parser
+
+
+def _add_checkpoint_command(commands, name: str, func, help_text: str) -> None:
+    checkpoint = commands.add_parser(name, help=help_text)
     checkpoint.add_argument("--run-id", required=True)
     checkpoint.add_argument("--step", required=True, choices=step_chain())
     checkpoint.add_argument("--prior", type=Path)
@@ -529,8 +657,7 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--record", action="append", default=[])
     checkpoint.add_argument("--processed-from", type=Path)
     checkpoint.add_argument("--output", type=Path, required=True)
-    checkpoint.set_defaults(func=command_checkpoint)
-    return parser
+    checkpoint.set_defaults(func=func)
 
 
 def main(argv: list[str] | None = None) -> int:
