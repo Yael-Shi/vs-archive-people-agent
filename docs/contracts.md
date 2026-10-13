@@ -270,7 +270,7 @@ Rows are ordered by `mention_key`. Shuffling the evidence mention array does not
 
 Logical parent: `evidence_package_logical_sha256`. Audit-only physical hashes: `evidence_package_file_sha256` and `identity_snapshot_file_sha256`. Both names end in `_file_sha256`, so the existing logical-hash exclusion rule leaves them out of the report logical body. The identity snapshot is an external file, not a generated logical parent. There is no `local_candidates_file_sha256`. v1 local candidates only flagged same-run overlap for review. They are not production identity, and this phase has no review v2 consumer, so v2 does not invent that input.
 
-`production_write_performed` and `photo_person_created` are false. The command reads the identity snapshot and publishes the report. It does not create a Person, alias, merge, or canonical-name change, and it does not approve identity. `review-package` still reads only `resolution-report-v1`.
+`production_write_performed` and `photo_person_created` are false. The command reads the identity snapshot and publishes the report. It does not create a Person, alias, merge, or canonical-name change, and it does not approve identity. `review-package` still reads only `resolution-report-v1`. `review-v2` is the consumer of this report. See identity-review-package-v2 below.
 
 ## identity-review-package-v1
 
@@ -285,6 +285,35 @@ File: `src/vs_archive_people/schemas/identity_review_package.v1.json`.
 Review copies `run_id` from the resolution report. Both lists carry `evidence_source`, `source_text_sha256`, `evidence_snippet`, `start_offset`, `end_offset`, `occurrence_index`, and `mention_fingerprint` from the resolution row. The package records `resolution_report_logical_sha256` from the verified report and `resolution_report_file_sha256` as the audit file hash. A reviewer can decide from this package alone. Each list is ordered by `mention_key`.
 
 No biography field is present. No `PhotoPerson` row is present.
+
+## identity-review-package-v2
+
+File: `src/vs_archive_people/schemas/identity_review_package.v2.json`.
+
+Written by `review-v2`. This command is outside `RUN_STEPS`. It does not replace v1 `review-package`. The input is a verified `resolution-report-v2`, the run id, and the output path. There is no evidence argument, no identity snapshot, no diagnostics argument, no local-candidates argument, and no decision file. Passing `resolution-report-v1` is `UNSUPPORTED_SCHEMA_VERSION`. v1 `review-package` still requires `resolution-report-v1` and raises `UNSUPPORTED_SCHEMA_VERSION` on `resolution-report-v2`. There is no automatic migration.
+
+```text
+review-v2 \
+  --resolution runs/resolution-v2.json \
+  --run-id run-001 \
+  --output runs/identity-review-v2.json
+```
+
+The package is a generated artifact. The logical parent is `resolution_report_logical_sha256`. The audit-only physical hash is `resolution_report_file_sha256`. That name ends in `_file_sha256`, so the existing logical-hash exclusion rule leaves it out of the package logical body. Review does not reopen the evidence package, the identity snapshot, or the displayed text, and it does not classify the mention again.
+
+`kind` is `IDENTITY_REVIEW_NOT_APPLY`. `production_write_performed`, `photo_person_created`, `biography_fields_included`, `human_approval_performed`, and `apply_authorized` are false. There is no `auto_resolution_proposals` list and no `proposal_status`.
+
+Every resolution becomes one `review_rows` entry. `DETERMINISTIC_EXISTING_PERSON` stays in that queue. Each row copies the resolution geometry, detector provenance, match fields, and `identity_is_production`, then sets `review_status` to `PENDING` and exactly one `review_reason`:
+
+- `DETERMINISTIC_EXISTING_PERSON` → `deterministic_existing_person_pending_review`
+- `AMBIGUOUS` → `ambiguous_existing_person`
+- `NEW_PERSON_CANDIDATE` → `new_person_candidate`
+
+`identity_is_production` means the resolution named an existing production person. It does not record human approval. Detector provenance does not drop a row, change the reason, or authorize apply. `NOT_A_PERSON` is not a v2 review classification.
+
+Rows are ordered by `mention_key`. A duplicate `mention_key` or `mention_fingerprint` fails closed. A verified row whose match fields disagree with its classification fails closed and is not repaired: a deterministic row has `identity_is_production` true, exactly one person id, a person name, and `matched_via` of `canonical_name` or `person_alias`; an ambiguous row has `identity_is_production` false, at least two person ids, and null name, via, and alias id; a new-person row has `identity_is_production` false, no person ids, and those same three fields null. Source `review_status` must already be `PENDING`.
+
+An empty resolution list publishes an empty `review_rows` array. The safety flags stay false.
 
 ## run-checkpoint-v1
 
@@ -308,7 +337,7 @@ Contract failures use these `error_code` values: `MALFORMED_ARTIFACT`, `ARTIFACT
 
 ## Provenance and hashes
 
-Generated artifacts are discovery selections, mention proposals, mention-proposal diagnostics, evidence packages (`evidence-package-v1` and `evidence-package-v2`), resolution reports (`resolution-report-v1` and `resolution-report-v2`), identity review packages, and run checkpoints. Each records:
+Generated artifacts are discovery selections, mention proposals, mention-proposal diagnostics, evidence packages (`evidence-package-v1` and `evidence-package-v2`), resolution reports (`resolution-report-v1` and `resolution-report-v2`), identity review packages (`identity-review-package-v1` and `identity-review-package-v2`), and run checkpoints. Each records:
 
 - `artifact_created_at` — UTC time `YYYY-MM-DDThh:mm:ssZ`
 - `producer.name` — `vs-archive-people`
@@ -322,7 +351,7 @@ Generated artifacts are discovery selections, mention proposals, mention-proposa
 
 `logical_content_sha256` is the SHA-256 of canonical JSON (`sort_keys`, compact separators, UTF-8) after dropping publication metadata and audit-only file hashes. Excluded keys are `artifact_created_at`, `producer`, `logical_content_sha256`, and any top-level key ending in `_file_sha256`. Keys ending in `_logical_sha256` stay in the logical body. Rebuilding a parent at a new timestamp changes its file hash and leaves its logical hash unchanged. A child that binds the parent logical hash therefore keeps the same logical hash and can still store the two different parent file hashes for audit.
 
-Consumers of generated artifacts validate the schema, recompute that logical hash, and refuse a mismatch as `LOGICAL_HASH_MISMATCH`. That check runs when freeze-evidence reads discovery, when `freeze-evidence-v2` reads discovery and `mention-proposals-v1`, when `package-mention-proposals` reads discovery, when v1 resolution reads an evidence package, when `resolve-v2` reads `evidence-package-v2`, when review reads a resolution report, and when discovery or checkpoint continuation reads a run checkpoint. External `document-text-snapshot-v1` and `identity-snapshot-v1` files are not generated artifacts and are bound only by file hash. `mention-proposals-v1` is validated when it is published. No later v1 step reads it. `freeze-evidence-v2` is its freeze consumer, and it is outside `RUN_STEPS`. The checkpoint schema version map still records `evidence-package-v1` and `resolution-report-v1`. `resolve-v2` is outside that map.
+Consumers of generated artifacts validate the schema, recompute that logical hash, and refuse a mismatch as `LOGICAL_HASH_MISMATCH`. That check runs when freeze-evidence reads discovery, when `freeze-evidence-v2` reads discovery and `mention-proposals-v1`, when `package-mention-proposals` reads discovery, when v1 resolution reads an evidence package, when `resolve-v2` reads `evidence-package-v2`, when `review-package` reads `resolution-report-v1`, when `review-v2` reads `resolution-report-v2`, and when discovery or checkpoint continuation reads a run checkpoint. External `document-text-snapshot-v1` and `identity-snapshot-v1` files are not generated artifacts and are bound only by file hash. `mention-proposals-v1` is validated when it is published. No later v1 step reads it. `freeze-evidence-v2` is its freeze consumer, and it is outside `RUN_STEPS`. The checkpoint schema version map still records `evidence-package-v1`, `resolution-report-v1`, and `identity-review-package-v1`. `resolve-v2` and `review-v2` are outside that map.
 
 The physical file hash is the SHA-256 of the indented JSON bytes that were published. `write_json_atomic` returns that hash. It changes when the timestamp or producer version changes, even when the logical hash does not.
 
@@ -330,4 +359,4 @@ Displayed-text hashes and `source_text_sha256` are logical hashes of the display
 
 ## What returns to vs-archive later
 
-Not in this slice. A future approved apply package, produced only from human decisions, would be consumed by `vs-archive` commands for preflight, backup, apply, and independent verify. Exact deterministic matches may be marked auto-resolved in that future package and would still require an explicit apply step.
+Not in this slice. A future approved apply package, produced only from human decisions recorded outside this phase, would be consumed by `vs-archive` commands for preflight, backup, apply, and independent verify. `identity-review-package-v2` does not record those decisions. A deterministic match stays pending in that package.

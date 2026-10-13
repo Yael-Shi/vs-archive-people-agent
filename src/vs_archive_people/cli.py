@@ -4,7 +4,9 @@ Pipeline commands: discover, freeze-evidence, resolve, review-package, checkpoin
 ``freeze-evidence`` reads a loose proposal list and publishes evidence-package-v1.
 ``freeze-evidence-v2`` reads mention-proposals-v1 and publishes evidence-package-v2.
 ``resolve`` reads evidence-package-v1. ``resolve-v2`` reads evidence-package-v2
-and publishes resolution-report-v2. Neither v2 command is a pipeline step.
+and publishes resolution-report-v2. ``review-package`` reads
+resolution-report-v1. ``review-v2`` reads resolution-report-v2 and publishes
+identity-review-package-v2. None of the v2 commands is a pipeline step.
 ``package-mention-proposals`` publishes
 mention-proposals-v1 from human geometry. ``find-mentions`` publishes the same
 artifact from automated detection, plus a diagnostic sidecar.
@@ -41,6 +43,7 @@ from vs_archive_people.discovery.select import select_items
 from vs_archive_people.evidence.package import build_evidence_package
 from vs_archive_people.evidence.package_v2 import build_evidence_package_v2
 from vs_archive_people.identity_review.package import build_review_package
+from vs_archive_people.identity_review.package_v2 import build_review_package_v2
 from vs_archive_people.resolution.match import build_resolution_report
 from vs_archive_people.resolution.match_v2 import build_resolution_report_v2
 from vs_archive_people.resolution.snapshot_index import build_index
@@ -213,6 +216,42 @@ def command_review(args: argparse.Namespace) -> int:
             "output_sha256": digest,
             "review_rows": len(package["review_rows"]),
             "auto_resolution_proposals": len(package["auto_resolution_proposals"]),
+        }
+    )
+    return 0
+
+
+def _pending_count(package: dict, classification: str) -> int:
+    return sum(
+        1 for row in package["review_rows"] if row["classification"] == classification
+    )
+
+
+def command_review_v2(args: argparse.Namespace) -> int:
+    """Publish a pending identity-review package. Does not approve or apply."""
+    report = read_json(args.resolution)
+    package = build_review_package_v2(
+        report,
+        run_id=args.run_id,
+        resolution_report_file_sha256=sha256_file(args.resolution),
+    )
+    digest = write_json_atomic(args.output, package)
+    _ok(
+        {
+            "output_sha256": digest,
+            "logical_content_sha256": package["logical_content_sha256"],
+            "schema_version": package["schema_version"],
+            "review_rows": len(package["review_rows"]),
+            "deterministic_pending_count": _pending_count(
+                package, "DETERMINISTIC_EXISTING_PERSON"
+            ),
+            "ambiguous_pending_count": _pending_count(package, "AMBIGUOUS"),
+            "new_person_candidate_pending_count": _pending_count(
+                package, "NEW_PERSON_CANDIDATE"
+            ),
+            "production_write_performed": package["production_write_performed"],
+            "human_approval_performed": package["human_approval_performed"],
+            "apply_authorized": package["apply_authorized"],
         }
     )
     return 0
@@ -425,6 +464,19 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--resolution", type=Path, required=True)
     review.add_argument("--output", type=Path, required=True)
     review.set_defaults(func=command_review)
+
+    review_v2 = commands.add_parser(
+        "review-v2",
+        help=(
+            "Publish identity-review-package-v2 from resolution-report-v2. "
+            "Not a pipeline step. Every row stays pending. "
+            "Does not approve or write production identity."
+        ),
+    )
+    review_v2.add_argument("--resolution", type=Path, required=True)
+    review_v2.add_argument("--run-id", required=True)
+    review_v2.add_argument("--output", type=Path, required=True)
+    review_v2.set_defaults(func=command_review_v2)
 
     pilot = commands.add_parser(
         "pilot-find-mentions",

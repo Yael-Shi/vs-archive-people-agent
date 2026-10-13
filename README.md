@@ -69,7 +69,16 @@ python -m vs_archive_people.cli checkpoint \
 
 `freeze-evidence-v2` publishes `evidence-package-v2` from `mention-proposals-v1`. It is not a checkpoint step. It re-checks every span against the displayed body. It does not read the diagnostics sidecar, and it does not assign identity. v1 `resolve` and review do not consume that package. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`.
 
-`resolve-v2` publishes `resolution-report-v2` from `evidence-package-v2` and an identity snapshot. It is not a checkpoint step. The lookup string is the frozen `name_surface`. The full `exact_mention` stays on the row for review. The command does not create or update a Person, alias, merge, or canonical name. `production_write_performed` is false. It does not read v1 evidence, and v1 `resolve` does not read v2 evidence. Review still reads only `resolution-report-v1`.
+`resolve-v2` publishes `resolution-report-v2` from `evidence-package-v2` and an identity snapshot. It is not a checkpoint step. The lookup string is the frozen `name_surface`. The full `exact_mention` stays on the row for review. The command does not create or update a Person, alias, merge, or canonical name. `production_write_performed` is false. It does not read v1 evidence, and v1 `resolve` does not read v2 evidence.
+
+`review-v2` publishes `identity-review-package-v2` from `resolution-report-v2`. It is not a checkpoint step. Every resolution, including `DETERMINISTIC_EXISTING_PERSON`, stays `PENDING` in `review_rows`. There is no auto-approval and no apply. `production_write_performed`, `human_approval_performed`, and `apply_authorized` are false. v1 `review-package` still reads only `resolution-report-v1`.
+
+```bash
+python -m vs_archive_people.cli review-v2 \
+  --resolution runs/resolution-v2.json \
+  --run-id run-001 \
+  --output runs/identity-review-v2.json
+```
 
 ```bash
 python -m vs_archive_people.cli resolve-v2 \
