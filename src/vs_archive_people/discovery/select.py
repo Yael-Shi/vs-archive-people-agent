@@ -8,32 +8,22 @@ from __future__ import annotations
 
 from vs_archive_people.artifacts.io import (
     DISCOVERY_SELECTION_SCHEMA,
-    RUN_CHECKPOINT_SCHEMA,
     ArtifactError,
-    IncompletePriorCheckpointError,
     require_object,
 )
-from vs_archive_people.artifacts.provenance import verify_generated_artifact
-from vs_archive_people.artifacts.schema_validate import step_chain
-from vs_archive_people.runs.checkpoint import require_resumable_checkpoint
 from vs_archive_people.evidence.text_bodies import (
     displayed_text_sha256,
     require_document_snapshot,
 )
+from vs_archive_people.runs.checkpoint import require_completed_prior_checkpoint
 
 
 def processed_item_hashes(checkpoint: dict | None) -> dict[int, str]:
     if checkpoint is None:
         return {}
-    document = require_object(checkpoint, "checkpoint")
-    require_resumable_checkpoint(document)
-    verify_generated_artifact(document, RUN_CHECKPOINT_SCHEMA, "checkpoint")
-    completed = document.get("completed_steps")
-    if list(completed) != list(step_chain()):
-        raise IncompletePriorCheckpointError(
-            "prior checkpoint is same-run resume state and cannot seed discovery "
-            "until review is complete"
-        )
+    document = require_completed_prior_checkpoint(
+        require_object(checkpoint, "checkpoint")
+    )
     rows = document.get("processed_items")
     if rows is None:
         return {}

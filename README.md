@@ -65,6 +65,19 @@ python -m vs_archive_people.cli checkpoint \
 
 `--prior-checkpoint` is optional. A later checkpoint of the same run is a new file. It takes `--prior` and continues only in the order `discover -> freeze-evidence -> resolve -> review`. Every input hash already recorded for the run must be supplied again and must match. Existing output paths are refused.
 
+`checkpoint` writes `run-checkpoint-v1`. `checkpoint-v2` writes `run-checkpoint-v2`. Both commands use those same step names. A run does not switch generation. On `freeze-evidence`, `resolve`, and `review`, `checkpoint-v2` requires `--record` of the matching v2 artifact: `evidence_package`, `resolution_report`, or `identity_review_package`. If `freeze-evidence` also passes `--processed-from`, that file must be the same evidence artifact as `evidence_package`, compared by SHA-256. Completing `review` means that pending review package was published. It does not approve identities.
+
+A completed checkpoint of either generation may be `--prior-checkpoint` for a new `discover` run. That is previous-run memory. It does not resume the old run.
+
+```bash
+python -m vs_archive_people.cli checkpoint-v2 \
+  --run-id run-001 \
+  --step discover \
+  --input document_text_snapshot=data/document_text_snapshot.json \
+  --record discovery_selection=runs/discovery.json \
+  --output runs/checkpoint-v2.discover.json
+```
+
 `freeze-evidence` does not find person names. It validates the loose mention-proposal list and publishes `evidence-package-v1`. It does not accept `mention-proposals-v1`. `mention_key` is a run-local label such as `M0001`. `mention_fingerprint` is the durable SHA-256 of the source position. See `docs/contracts.md`.
 
 `freeze-evidence-v2` publishes `evidence-package-v2` from `mention-proposals-v1`. It is not a checkpoint step. It re-checks every span against the displayed body. It does not read the diagnostics sidecar, and it does not assign identity. v1 `resolve` and review do not consume that package. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`.

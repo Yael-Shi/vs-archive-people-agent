@@ -331,13 +331,35 @@ SHA-256 fields are 64 hexadecimal characters. Uppercase and lowercase are both a
 
 Published artifacts are checked with Draft 2020-12 against the schema documents in the package. Each schema document is itself checked as a Draft 2020-12 schema. A document that names a known `schema_version` and then fails that schema is refused. The validation message includes the failing instance path.
 
-`checkpoint` continuation stays on the checkpoint's `run_id`. The command refuses a `--run-id` that differs. `--processed-from` refuses an evidence package whose `run_id` differs from `--run-id`. Discovery may read a review-complete checkpoint from another run.
+`checkpoint` continuation stays on the checkpoint's `run_id` and on `run-checkpoint-v1`. The command refuses a `--run-id` that differs. `--processed-from` refuses an evidence package whose `run_id` differs from `--run-id`, and it refuses an evidence package from the other generation. Discovery may read a review-complete `run-checkpoint-v1` or `run-checkpoint-v2` from another run. That read is memory for a new run. It does not resume the prior generation.
+
+## run-checkpoint-v2
+
+File: `src/vs_archive_people/schemas/run_checkpoint.v2.json`.
+
+Written by `checkpoint-v2`. The logical steps remain `discover -> freeze-evidence -> resolve -> review`. There is no `freeze-evidence-v2`, `resolve-v2`, or `review-v2` checkpoint step name. Generation is the checkpoint `schema_version` and its `schema_versions` map.
+
+The v2 map keeps the v1 field names. `discovery_selection` stays `discovery-selection-v1`. `document_text_snapshot` and `identity_snapshot` stay on their v1 snapshot schemas. `evidence_package` is `evidence-package-v2`. `resolution_report` is `resolution-report-v2`. `identity_review_package` is `identity-review-package-v2`. `run_checkpoint` is `run-checkpoint-v2`. Mention proposals stay outside the map, as they do for v1, because they are not a `RUN_STEPS` stage.
+
+`published_schema_versions()` with no argument remains the v1 map. `published_schema_versions("run-checkpoint-v2")` returns the v2 map. A recorded map that differs from the installed map for that generation is `UNSUPPORTED_SCHEMA_VERSION`.
+
+Same-run resume passes the generation explicitly. `checkpoint` resumes only `run-checkpoint-v1`. `checkpoint-v2` resumes only `run-checkpoint-v2`. Supplying the other generation is `UNSUPPORTED_SCHEMA_VERSION`. The prior checkpoint object is not rewritten into the other schema.
+
+On `freeze-evidence`, `resolve`, and `review`, `checkpoint-v2` reads the recorded artifact and requires its verified schema to be the v2 contract for that role. A v1 artifact is `UNSUPPORTED_SCHEMA_VERSION`. v1 `checkpoint` still allows a hash-only record. When a file is supplied, that file must match the v1 contract. There is no migration.
+
+When `checkpoint-v2` `freeze-evidence` is given `--processed-from`, that file's SHA-256 must equal the SHA-256 recorded for `evidence_package`. The recorded evidence package is still schema-checked, logically hashed, and run-id checked before that comparison. A different file is `INPUT_HASH_CHANGED`. v1 does not add this equality check.
+
+A completed checkpoint of either generation may be `--prior-checkpoint` for discovery when `completed_steps` equals `RUN_STEPS` in order. An earlier checkpoint of either generation is `INCOMPLETE_PRIOR_CHECKPOINT`. The prior `run_id` may differ. The new discovery run keeps the `run_id` it was given. It does not inherit the prior generation.
+
+Completing `review` on a v2 checkpoint means `identity-review-package-v2` was published. Every row in that package stays pending. The checkpoint does not store human approval, apply authorization, or a production write.
+
+Provenance, the logical hash, and atomic no-clobber publication are the same rules as `run-checkpoint-v1`.
 
 Contract failures use these `error_code` values: `MALFORMED_ARTIFACT`, `ARTIFACT_READ_ERROR`, `ARTIFACT_EXISTS`, `INPUT_HASH_CHANGED`, `MISSING_BOUND_INPUT`, `UNSUPPORTED_SCHEMA_VERSION`, `LOGICAL_HASH_MISMATCH`, `RUN_ID_MISMATCH`, `INCOMPLETE_PRIOR_CHECKPOINT`, `FIND_MENTIONS_CONFIGURATION`, `FIND_MENTIONS_PROVIDER`, and `DIAGNOSTICS_PUBLICATION_FAILED`. Invalid JSON is `MALFORMED_ARTIFACT`. A missing, unreadable, or non-UTF-8 input file is `ARTIFACT_READ_ERROR`. `DIAGNOSTICS_PUBLICATION_FAILED` is not a `BLOCKED` result: the proposal file remains, and stdout reports `PROPOSAL_PUBLISHED`.
 
 ## Provenance and hashes
 
-Generated artifacts are discovery selections, mention proposals, mention-proposal diagnostics, evidence packages (`evidence-package-v1` and `evidence-package-v2`), resolution reports (`resolution-report-v1` and `resolution-report-v2`), identity review packages (`identity-review-package-v1` and `identity-review-package-v2`), and run checkpoints. Each records:
+Generated artifacts are discovery selections, mention proposals, mention-proposal diagnostics, evidence packages (`evidence-package-v1` and `evidence-package-v2`), resolution reports (`resolution-report-v1` and `resolution-report-v2`), identity review packages (`identity-review-package-v1` and `identity-review-package-v2`), and run checkpoints (`run-checkpoint-v1` and `run-checkpoint-v2`). Each records:
 
 - `artifact_created_at` — UTC time `YYYY-MM-DDThh:mm:ssZ`
 - `producer.name` — `vs-archive-people`
@@ -351,7 +373,7 @@ Generated artifacts are discovery selections, mention proposals, mention-proposa
 
 `logical_content_sha256` is the SHA-256 of canonical JSON (`sort_keys`, compact separators, UTF-8) after dropping publication metadata and audit-only file hashes. Excluded keys are `artifact_created_at`, `producer`, `logical_content_sha256`, and any top-level key ending in `_file_sha256`. Keys ending in `_logical_sha256` stay in the logical body. Rebuilding a parent at a new timestamp changes its file hash and leaves its logical hash unchanged. A child that binds the parent logical hash therefore keeps the same logical hash and can still store the two different parent file hashes for audit.
 
-Consumers of generated artifacts validate the schema, recompute that logical hash, and refuse a mismatch as `LOGICAL_HASH_MISMATCH`. That check runs when freeze-evidence reads discovery, when `freeze-evidence-v2` reads discovery and `mention-proposals-v1`, when `package-mention-proposals` reads discovery, when v1 resolution reads an evidence package, when `resolve-v2` reads `evidence-package-v2`, when `review-package` reads `resolution-report-v1`, when `review-v2` reads `resolution-report-v2`, and when discovery or checkpoint continuation reads a run checkpoint. External `document-text-snapshot-v1` and `identity-snapshot-v1` files are not generated artifacts and are bound only by file hash. `mention-proposals-v1` is validated when it is published. No later v1 step reads it. `freeze-evidence-v2` is its freeze consumer, and it is outside `RUN_STEPS`. The checkpoint schema version map still records `evidence-package-v1`, `resolution-report-v1`, and `identity-review-package-v1`. `resolve-v2` and `review-v2` are outside that map.
+Consumers of generated artifacts validate the schema, recompute that logical hash, and refuse a mismatch as `LOGICAL_HASH_MISMATCH`. That check runs when freeze-evidence reads discovery, when `freeze-evidence-v2` reads discovery and `mention-proposals-v1`, when `package-mention-proposals` reads discovery, when v1 resolution reads an evidence package, when `resolve-v2` reads `evidence-package-v2`, when `review-package` reads `resolution-report-v1`, when `review-v2` reads `resolution-report-v2`, and when discovery or checkpoint continuation reads a run checkpoint. External `document-text-snapshot-v1` and `identity-snapshot-v1` files are not generated artifacts and are bound only by file hash. `mention-proposals-v1` is validated when it is published. No later v1 step reads it. `freeze-evidence-v2` is its freeze consumer, and it is outside `RUN_STEPS`. `run-checkpoint-v1` records `evidence-package-v1`, `resolution-report-v1`, and `identity-review-package-v1`. `run-checkpoint-v2` records `evidence-package-v2`, `resolution-report-v2`, and `identity-review-package-v2`. Mention proposals stay outside both maps. `checkpoint` resumes only the v1 map. `checkpoint-v2` resumes only the v2 map.
 
 The physical file hash is the SHA-256 of the indented JSON bytes that were published. `write_json_atomic` returns that hash. It changes when the timestamp or producer version changes, even when the logical hash does not.
 

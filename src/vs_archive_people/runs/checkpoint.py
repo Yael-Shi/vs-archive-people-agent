@@ -5,15 +5,23 @@ freeze-evidence, resolve, and review. Every input hash already stored for the
 run must be supplied again unchanged. schema_versions stay the versions
 recorded when the run started. Writing the checkpoint file is the caller's
 job and must go through atomic publication of a new path.
+
+``run-checkpoint-v1`` and ``run-checkpoint-v2`` use the same step names. A run
+keeps the generation it started with. Completing ``review`` means the identity
+review package for that generation was published. It does not mean a person
+approved the identities, and it does not authorize an apply.
 """
 
 from __future__ import annotations
 
 from vs_archive_people.artifacts.io import (
     RUN_CHECKPOINT_SCHEMA,
+    RUN_CHECKPOINT_V2_SCHEMA,
     ArtifactError,
+    IncompletePriorCheckpointError,
     InputHashChangedError,
     MissingBoundInputError,
+    RunIdMismatchError,
     UnsupportedSchemaVersionError,
     require_object,
 )
@@ -32,6 +40,15 @@ __all__ = [
     "MissingBoundInputError",
     "UnsupportedSchemaVersionError",
 ]
+
+_CHECKPOINT_SCHEMAS = frozenset({RUN_CHECKPOINT_SCHEMA, RUN_CHECKPOINT_V2_SCHEMA})
+
+# Logical steps whose recorded artifact chooses the run generation.
+STEP_OUTPUT_ROLES = {
+    "freeze-evidence": "evidence_package",
+    "resolve": "resolution_report",
+    "review": "identity_review_package",
+}
 
 
 def _hash_map(value: object, label: str) -> dict[str, str]:
@@ -67,23 +84,35 @@ def _require_history(completed: object) -> list[str]:
     return completed
 
 
-def require_resumable_checkpoint(document: dict) -> dict[str, str]:
-    """Return the recorded schema map when this package can continue the run.
+def _require_checkpoint_schema(checkpoint_schema: str) -> str:
+    if checkpoint_schema not in _CHECKPOINT_SCHEMAS:
+        raise UnsupportedSchemaVersionError(
+            f"unsupported checkpoint schema {checkpoint_schema!r}"
+        )
+    return checkpoint_schema
+
+
+def require_resumable_checkpoint(
+    document: dict, *, checkpoint_schema: str = RUN_CHECKPOINT_SCHEMA
+) -> dict[str, str]:
+    """Return the recorded schema map when this generation can continue the run.
 
     A checkpoint keeps the schema versions it started with. This package does
-    not rewrite them and does not migrate an older map. A map that differs
-    from the installed contracts is ``UNSUPPORTED_SCHEMA_VERSION``.
+    not rewrite them and does not migrate one generation into the other. A map
+    that differs from the installed contract for ``checkpoint_schema`` is
+    ``UNSUPPORTED_SCHEMA_VERSION``.
     """
+    expected_schema = _require_checkpoint_schema(checkpoint_schema)
     version = document.get("schema_version")
-    if version != RUN_CHECKPOINT_SCHEMA:
-        if isinstance(version, str) and version.startswith("run-checkpoint-"):
+    if version != expected_schema:
+        if isinstance(version, str) and (
+            version in _CHECKPOINT_SCHEMAS or version.startswith("run-checkpoint-")
+        ):
             raise UnsupportedSchemaVersionError(
-                "UNSUPPORTED_SCHEMA_VERSION: this package cannot resume "
-                f"checkpoint schema_version {version!r}"
+                f"checkpoint schema_version {version!r} cannot resume as "
+                f"{expected_schema!r}"
             )
-        raise ArtifactError(
-            f"checkpoint schema_version must be {RUN_CHECKPOINT_SCHEMA}"
-        )
+        raise ArtifactError(f"checkpoint schema_version must be {expected_schema}")
     recorded = document.get("schema_versions")
     if not isinstance(recorded, dict) or any(
         not isinstance(key, str) for key in recorded
@@ -91,19 +120,92 @@ def require_resumable_checkpoint(document: dict) -> dict[str, str]:
         raise ArtifactError("checkpoint schema_versions must be an object")
     if any(not isinstance(value, str) for value in recorded.values()):
         raise ArtifactError("checkpoint schema_versions values must be strings")
-    expected = published_schema_versions()
+    expected = published_schema_versions(expected_schema)
     if recorded != expected:
         raise UnsupportedSchemaVersionError(
             "UNSUPPORTED_SCHEMA_VERSION: checkpoint schema_versions are not the "
-            "contracts this package can resume"
+            f"contracts this package can resume for {expected_schema}"
         )
     return dict(recorded)
 
 
-def assert_inputs_unchanged(checkpoint: dict, input_hashes: dict[str, str]) -> None:
+def require_completed_prior_checkpoint(document: dict) -> dict:
+    """Accept a finished v1 or v2 checkpoint as discovery memory for a new run.
+
+    The prior run is not resumed, and its generation is not copied onto the
+    new run. An unfinished checkpoint of either generation is
+    ``INCOMPLETE_PRIOR_CHECKPOINT``.
+    """
+    version = document.get("schema_version")
+    if version not in _CHECKPOINT_SCHEMAS:
+        if isinstance(version, str) and version.startswith("run-checkpoint-"):
+            raise UnsupportedSchemaVersionError(
+                "UNSUPPORTED_SCHEMA_VERSION: this package cannot use "
+                f"checkpoint schema_version {version!r} as discovery memory"
+            )
+        raise ArtifactError(
+            "prior checkpoint schema_version must be "
+            f"{RUN_CHECKPOINT_SCHEMA} or {RUN_CHECKPOINT_V2_SCHEMA}"
+        )
+    require_resumable_checkpoint(document, checkpoint_schema=version)
+    verified = verify_generated_artifact(document, version, "checkpoint")
+    if list(verified.get("completed_steps")) != list(step_chain()):
+        raise IncompletePriorCheckpointError(
+            "prior checkpoint is same-run resume state and cannot seed discovery "
+            "until review is complete"
+        )
+    return verified
+
+
+def _require_step_artifact(
+    *,
+    step: str,
+    run_id: str,
+    checkpoint_schema: str,
+    output_hashes: dict[str, str],
+    bound_artifacts: dict[str, dict] | None,
+) -> None:
+    """Verify the generation artifact for a step that records one.
+
+    v1 may omit the artifact and keep the historical hash-only record. v2
+    requires the verified artifact and its output hash. A supplied artifact
+    of the other generation is ``UNSUPPORTED_SCHEMA_VERSION``.
+    """
+    role = STEP_OUTPUT_ROLES.get(step)
+    if role is None:
+        return
+    expected = published_schema_versions(checkpoint_schema)[role]
+    artifact = None if bound_artifacts is None else bound_artifacts.get(role)
+    if checkpoint_schema == RUN_CHECKPOINT_V2_SCHEMA:
+        if artifact is None:
+            raise ArtifactError(f"{step} requires a verified {expected} artifact")
+        if role not in output_hashes:
+            raise ArtifactError(f"{step} must record output hash {role}")
+    if artifact is None:
+        return
+    document = require_object(artifact, role)
+    actual = document.get("schema_version")
+    if actual != expected:
+        raise UnsupportedSchemaVersionError(
+            f"{role} schema_version {actual!r} does not match "
+            f"{checkpoint_schema} contract {expected!r}"
+        )
+    verify_generated_artifact(document, expected, role)
+    if document.get("run_id") != run_id:
+        raise RunIdMismatchError(
+            f"{role} run_id does not match checkpoint run {run_id!r}"
+        )
+
+
+def assert_inputs_unchanged(
+    checkpoint: dict,
+    input_hashes: dict[str, str],
+    *,
+    checkpoint_schema: str = RUN_CHECKPOINT_SCHEMA,
+) -> None:
     document = require_object(checkpoint, "checkpoint")
-    require_resumable_checkpoint(document)
-    verify_generated_artifact(document, RUN_CHECKPOINT_SCHEMA, "checkpoint")
+    require_resumable_checkpoint(document, checkpoint_schema=checkpoint_schema)
+    verify_generated_artifact(document, checkpoint_schema, "checkpoint")
     recorded = _hash_map(document.get("input_file_hashes"), "input_file_hashes")
     proposed = _hash_map(input_hashes, "input hashes")
     missing = sorted(set(recorded) - set(proposed))
@@ -126,19 +228,29 @@ def initial_checkpoint(
     output_hashes: dict[str, str],
     processed_items: list[dict] | None = None,
     created_at: str | None = None,
+    checkpoint_schema: str = RUN_CHECKPOINT_SCHEMA,
 ) -> dict:
     if not isinstance(run_id, str) or not run_id.strip():
         raise ArtifactError("run_id is required")
+    schema = _require_checkpoint_schema(checkpoint_schema)
     chain = step_chain()
     if step != chain[0]:
         raise ArtifactError(f"a run must start at {chain[0]}")
+    outputs = _hash_map(output_hashes, "output hashes")
+    _require_step_artifact(
+        step=step,
+        run_id=run_id,
+        checkpoint_schema=schema,
+        output_hashes=outputs,
+        bound_artifacts=None,
+    )
     checkpoint = {
-        "schema_version": RUN_CHECKPOINT_SCHEMA,
+        "schema_version": schema,
         "run_id": run_id,
-        "schema_versions": published_schema_versions(),
+        "schema_versions": published_schema_versions(schema),
         "input_file_hashes": _hash_map(input_hashes, "input hashes"),
         "completed_steps": [step],
-        "output_file_hashes": _hash_map(output_hashes, "output hashes"),
+        "output_file_hashes": outputs,
         "processed_items": _merge_processed([], list(processed_items or [])),
     }
     stamp_generated_artifact(checkpoint, created_at=created_at)
@@ -154,10 +266,13 @@ def append_step(
     output_hashes: dict[str, str],
     processed_items: list[dict] | None = None,
     created_at: str | None = None,
+    checkpoint_schema: str = RUN_CHECKPOINT_SCHEMA,
+    bound_artifacts: dict[str, dict] | None = None,
 ) -> dict:
     document = require_object(prior, "checkpoint")
-    schema_versions = require_resumable_checkpoint(document)
-    verify_generated_artifact(document, RUN_CHECKPOINT_SCHEMA, "checkpoint")
+    schema = _require_checkpoint_schema(checkpoint_schema)
+    schema_versions = require_resumable_checkpoint(document, checkpoint_schema=schema)
+    verify_generated_artifact(document, schema, "checkpoint")
     completed = _require_history(document.get("completed_steps"))
     chain = step_chain()
     if len(completed) >= len(chain):
@@ -167,11 +282,19 @@ def append_step(
         if step in completed:
             raise ArtifactError(f"step {step} is already recorded")
         raise ArtifactError(f"next step must be {expected}")
-    assert_inputs_unchanged(document, input_hashes)
+    assert_inputs_unchanged(document, input_hashes, checkpoint_schema=schema)
+    outputs = _hash_map(output_hashes, "output hashes")
+    _require_step_artifact(
+        step=step,
+        run_id=document["run_id"],
+        checkpoint_schema=schema,
+        output_hashes=outputs,
+        bound_artifacts=bound_artifacts,
+    )
     merged_inputs = _hash_map(document.get("input_file_hashes"), "input_file_hashes")
     merged_inputs.update(_hash_map(input_hashes, "input hashes"))
     merged_outputs = _hash_map(document.get("output_file_hashes"), "output_file_hashes")
-    for name, digest in _hash_map(output_hashes, "output hashes").items():
+    for name, digest in outputs.items():
         if name in merged_outputs and merged_outputs[name] != digest:
             raise ArtifactError(
                 f"output artifact {name} is already bound to another hash"
@@ -181,7 +304,7 @@ def append_step(
     if processed_items is not None:
         items = _merge_processed(items, processed_items)
     checkpoint = {
-        "schema_version": RUN_CHECKPOINT_SCHEMA,
+        "schema_version": schema,
         "run_id": document["run_id"],
         "schema_versions": schema_versions,
         "input_file_hashes": merged_inputs,
