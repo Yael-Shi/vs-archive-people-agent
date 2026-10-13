@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/mention_proposal_diagnostics.v1.json",
+  "title": "Mention proposal diagnostics v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "artifact_created_at",
+    "producer",
+    "logical_content_sha256",
+    "mention_proposals_logical_sha256",
+    "mention_proposals_file_sha256",
+    "rejected",
+    "suppressed",
+    "conflicts"
+  ],
+  "properties": {
+    "schema_version": {"const": "mention-proposal-diagnostics-v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "artifact_created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "producer": {"$ref": "https://vs-archive.local/schemas/producer.v1.json"},
+    "logical_content_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "mention_proposals_logical_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "mention_proposals_file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "rejected": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rejected"}
+    },
+    "suppressed": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/suppressed"}
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/conflict"}
+    }
+  },
+  "$defs": {
+    "segmentId": {
+      "anyOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "rejected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_item_id",
+        "evidence_source",
+        "surface",
+        "reason",
+        "segment_id"
+      ],
+      "dependentRequired": {
+        "start_offset": ["end_offset"],
+        "end_offset": ["start_offset"]
+      },
+      "properties": {
+        "archive_item_id": {"type": "integer"},
+        "evidence_source": {"type": "string", "minLength": 1},
+        "surface": {"type": "string"},
+        "reason": {
+          "enum": [
+            "UNKNOWN_SEGMENT",
+            "EMPTY_SURFACE",
+            "SURFACE_NOT_IN_SEGMENT",
+            "END_SEGMENT_NOT_NEXT_LINE",
+            "AMBIGUOUS_REPEATED_SURFACE",
+            "OCCURRENCE_OUT_OF_RANGE",
+            "OFFSET_INVARIANT_FAILED",
+            "TITLE_SPLIT_UNRESOLVED",
+            "UNSAFE_NAME_SPLIT",
+            "NAME_SURFACE_NOT_IN_FULL",
+            "AMBIGUOUS_NAME_SURFACE",
+            "TITLE_SURFACE_NOT_IN_FULL",
+            "AMBIGUOUS_TITLE_SURFACE",
+            "TITLE_NAME_OVERLAP"
+          ]
+        },
+        "segment_id": {"$ref": "#/$defs/segmentId"},
+        "start_offset": {"type": "integer", "minimum": 0},
+        "end_offset": {"type": "integer", "minimum": 0}
+      }
+    },
+    "suppressed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_item_id",
+        "evidence_source",
+        "surface",
+        "reason",
+        "segment_id"
+      ],
+      "dependentRequired": {
+        "start_offset": ["end_offset"],
+        "end_offset": ["start_offset"]
+      },
+      "properties": {
+        "archive_item_id": {"type": "integer"},
+        "evidence_source": {"type": "string", "minLength": 1},
+        "surface": {"type": "string"},
+        "reason": {
+          "enum": [
+            "TITLE_OR_ROLE_WITHOUT_NAME",
+            "PLACE_OR_INSTITUTION_CONTEXT",
+            "EMBEDDED_KNOWN_NAME"
+          ]
+        },
+        "segment_id": {"$ref": "#/$defs/segmentId"},
+        "start_offset": {"type": "integer", "minimum": 0},
+        "end_offset": {"type": "integer", "minimum": 0}
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_item_id",
+        "evidence_source",
+        "surface",
+        "reason",
+        "segment_id",
+        "start_offset",
+        "end_offset"
+      ],
+      "properties": {
+        "archive_item_id": {"type": "integer"},
+        "evidence_source": {"type": "string", "minLength": 1},
+        "surface": {"type": "string", "minLength": 1},
+        "reason": {"enum": ["SPLIT_CONFLICT", "ABSORB_AMBIGUOUS"]},
+        "segment_id": {"$ref": "#/$defs/segmentId"},
+        "start_offset": {"type": "integer", "minimum": 0},
+        "end_offset": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

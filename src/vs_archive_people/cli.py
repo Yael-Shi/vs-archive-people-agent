@@ -2,8 +2,10 @@
 
 Pipeline commands: discover, freeze-evidence, resolve, review-package, checkpoint.
 ``package-mention-proposals`` publishes mention-proposals-v1 from human geometry.
-``pilot-find-mentions`` is experimental. Neither command is a pipeline step.
-Each output path is published atomically and is refused when it already exists.
+``find-mentions`` publishes the same artifact from automated detection, plus a
+diagnostic sidecar. ``pilot-find-mentions`` is experimental. None of those
+commands is a pipeline step. Each output path is published atomically and is
+refused when it already exists.
 """
 
 from __future__ import annotations
@@ -21,6 +23,9 @@ from vs_archive_people.artifacts.io import (
     sha256_file,
     write_json_atomic,
 )
+from vs_archive_people.find_mentions.errors import DiagnosticsPublicationFailed
+from vs_archive_people.find_mentions.gemini import GeminiSemanticDetector
+from vs_archive_people.find_mentions.run import publish_mention_findings
 from vs_archive_people.artifacts.provenance import (
     stamp_generated_artifact,
     verify_generated_artifact,
@@ -177,6 +182,60 @@ def command_pilot_find_mentions(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_find_mentions(args: argparse.Namespace) -> int:
+    """Publish mention-proposals-v1 for the whole discovery selection.
+
+    The diagnostic sidecar is attempted only after the proposal file exists.
+    A sidecar failure leaves that proposal in place.
+    """
+    detector = GeminiSemanticDetector()
+    snapshot = read_json(args.documents)
+    discovery = read_json(args.discovery)
+    identity = read_json(args.identity)
+    try:
+        published = publish_mention_findings(
+            snapshot,
+            discovery,
+            identity,
+            run_id=args.run_id,
+            document_snapshot_file_sha256=sha256_file(args.documents),
+            discovery_file_sha256=sha256_file(args.discovery),
+            identity_snapshot_file_sha256=sha256_file(args.identity),
+            detector=detector,
+            proposal_output=args.output,
+            diagnostics_output=args.diagnostics,
+        )
+    except DiagnosticsPublicationFailed as exc:
+        print(
+            json.dumps(
+                {
+                    "status": "PROPOSAL_PUBLISHED",
+                    "error_code": "DIAGNOSTICS_PUBLICATION_FAILED",
+                    "proposal_output": exc.proposal_output,
+                    "proposal_sha256": exc.proposal_sha256,
+                    "proposal_logical_sha256": exc.proposal_logical_sha256,
+                    "diagnostics_published": False,
+                    "reason": str(exc),
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 2
+    _ok(
+        {
+            "proposal_output": str(args.output),
+            "proposal_sha256": published.proposal_sha256,
+            "proposal_logical_sha256": published.proposal_logical_sha256,
+            "diagnostics_output": str(args.diagnostics),
+            "diagnostics_sha256": published.diagnostics_sha256,
+            "diagnostics_logical_sha256": published.diagnostics_logical_sha256,
+            "diagnostics_published": True,
+            "mention_count": published.mention_count,
+        }
+    )
+    return 0
+
+
 def command_package_mention_proposals(args: argparse.Namespace) -> int:
     """Publish mention-proposals-v1 from offsets. Does not call a provider."""
     snapshot = read_json(args.documents)
@@ -301,6 +360,21 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--run-id", required=True)
     package.add_argument("--output", type=Path, required=True)
     package.set_defaults(func=command_package_mention_proposals)
+
+    finder = commands.add_parser(
+        "find-mentions",
+        help=(
+            "Publish mention-proposals-v1 for a discovery selection. "
+            "Not a pipeline step. Does not assign production identity."
+        ),
+    )
+    finder.add_argument("--documents", type=Path, required=True)
+    finder.add_argument("--discovery", type=Path, required=True)
+    finder.add_argument("--identity", type=Path, required=True)
+    finder.add_argument("--run-id", required=True)
+    finder.add_argument("--output", type=Path, required=True)
+    finder.add_argument("--diagnostics", type=Path, required=True)
+    finder.set_defaults(func=command_find_mentions)
 
     checkpoint = commands.add_parser("checkpoint")
     checkpoint.add_argument("--run-id", required=True)

@@ -37,6 +37,7 @@ Generated artifacts, produced and stamped here:
 
 - discovery selection
 - mention proposals (`mention-proposals-v1`)
+- mention-proposal diagnostics (`mention-proposal-diagnostics-v1`)
 - evidence package
 - resolution report
 - identity-review package
@@ -52,7 +53,9 @@ A title is metadata, not evidence. Eligible bodies are the displayed OCR transcr
 
 `freeze-evidence` does not find person names. The v1 command still reads a loose proposal list, or an object with a `mentions` array, and checks those proposals against the displayed body. It publishes an immutable evidence package. It does not discover names, assign production identity, or write production data.
 
-`mention-proposals-v1` is a separate generated artifact. `package-mention-proposals` publishes it from human geometry: offsets and an optional `surface_kind`. The command derives `exact_mention`, `name_surface`, `title_surface`, and `evidence_snippet` from the displayed body, then orders mentions by archive item, evidence source, and outer offsets before stamping. It inserts the `human-authored` detector, leaves `identity_snapshot_file_sha256` null, and does not call a provider. Automated `find-mentions` is not implemented. `freeze-evidence` does not read `mention-proposals-v1`. Artifact validation rejects a duplicate outer span, an outer span with more than one line break, and a `surface_kind` that contradicts the title slice.
+`mention-proposals-v1` is a separate generated artifact. Two producers write it. `package-mention-proposals` publishes it from human geometry: offsets and an optional `surface_kind`. The command derives `exact_mention`, `name_surface`, `title_surface`, and `evidence_snippet` from the displayed body, then orders mentions by archive item, evidence source, and outer offsets before stamping. It inserts the `human-authored` detector, leaves `identity_snapshot_file_sha256` null, and does not call a provider. `find-mentions` publishes the same contract for the whole discovery selection. It records the `semantic-surface` and `known-name` detectors, and it does not assign a `person_id`. `freeze-evidence` does not read `mention-proposals-v1`. Artifact validation rejects a duplicate outer span, an outer span with more than one line break, and a `surface_kind` that contradicts the title slice.
+
+`mention-proposal-diagnostics-v1` is a sidecar written after the proposal file. It stores the proposal logical hash and the proposal file hash, plus rejected, suppressed, and conflict rows. It is not an input to freeze. Publication is not a two-file transaction: a sidecar failure leaves the proposal in place.
 
 v1 evidence, resolution, review, and `run-checkpoint-v1` are unchanged. `RUN_STEPS` remains `discover -> freeze-evidence -> resolve -> review`.
 
@@ -82,8 +85,11 @@ Outputs are immutable. Publishing a path that already exists fails. The writer f
 
 ## Error model
 
-Contract failures are controlled `ArtifactError` values. The CLI prints structured `BLOCKED` JSON and a nonzero exit code. Codes in use:
+Contract failures are controlled `ArtifactError` values. The CLI prints structured `BLOCKED` JSON and a nonzero exit code. `DIAGNOSTICS_PUBLICATION_FAILED` is the exception: stdout reports `PROPOSAL_PUBLISHED` because the proposal file remains. Codes in use:
 
+- find-mentions configuration, when the semantic provider cannot be started
+- find-mentions provider, when a required semantic call fails
+- diagnostics publication failed, when the proposal file exists and the sidecar does not
 - malformed artifact, including invalid JSON
 - artifact read error, for a missing, unreadable, or non-UTF-8 input
 - artifact exists
@@ -98,7 +104,7 @@ Individual validation sentences are not part of this summary.
 
 ## Current non-goals
 
-- automated mention finding. `package-mention-proposals` publishes `mention-proposals-v1` from human geometry. It is outside `RUN_STEPS`. An isolated Gemini mention pilot can propose surface spans for one displayed body. The pilot is not a pipeline step and not a versioned artifact. See `docs/gemini-mention-pilot.md`. Automated `find-mentions` is not implemented.
+- feeding official proposals into v1 freeze. `find-mentions` and `package-mention-proposals` publish `mention-proposals-v1` outside `RUN_STEPS`. v1 `freeze-evidence` still reads the loose proposal list. An isolated Gemini mention pilot can propose surface spans for one displayed body. The pilot is not a pipeline step and not a versioned artifact. See `docs/gemini-mention-pilot.md`.
 - historical or internet research
 - biographies
 - tagging
@@ -107,4 +113,4 @@ Individual validation sentences are not part of this summary.
 
 ## Future extension points
 
-Not implemented: automated `find-mentions`, the mention-proposal diagnostics sidecar, evidence-package-v2, resolution-report-v2, identity-review-package-v2, run-checkpoint-v2, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. The Gemini mention pilot does not fill that gap. `package-mention-proposals` publishes `mention-proposals-v1` only.
+Not implemented: evidence-package-v2, resolution-report-v2, identity-review-package-v2, run-checkpoint-v2, research, human decision artifacts, biography review, an approved apply package, and the main-repository apply and verify workflow that would consume that package. `find-mentions` publishes `mention-proposals-v1` and the diagnostics sidecar. It does not change v1 freeze, resolution, review, or checkpoints. The Gemini mention pilot remains a separate experiment.
