@@ -30,6 +30,9 @@ SCHEMA_FILES = {
     "run-checkpoint-v2": "run_checkpoint.v2.json",
     "mention-proposals-v1": "mention_proposals.v1.json",
     "mention-proposal-diagnostics-v1": "mention_proposal_diagnostics.v1.json",
+    "mention-run-comparison-v1": "mention_run_comparison.v1.json",
+    "mention-run-comparison-v2": "mention_run_comparison.v2.json",
+    "mention-run-comparison-v3": "mention_run_comparison.v3.json",
 }
 
 # This constant owns checkpoint progression. The JSON Schema enum only

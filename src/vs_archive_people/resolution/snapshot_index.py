@@ -11,15 +11,19 @@ Biography text is never copied into the index.
 
 from __future__ import annotations
 
+import json
 import unicodedata
 from dataclasses import dataclass, field
 
 from vs_archive_people.artifacts.io import (
     IDENTITY_SNAPSHOT_SCHEMA,
     ArtifactError,
+    UnsupportedSchemaVersionError,
     require_object,
     require_schema,
 )
+
+BIOGRAPHY_IDENTITY_SCHEMA = "vs-archive-biography-production-identity-snapshot-v1"
 
 PRODUCTION_MODELS = (
     "Person",
@@ -107,6 +111,27 @@ def _require_row_id(row: dict, label: str) -> int:
     return value
 
 
+def project_to_identity_snapshot_v1(document: dict) -> dict:
+    """Copy a production identity export into identity-snapshot-v1.
+
+    The biography export uses another schema name and the same model rows.
+    This copy changes that name only. It does not drop or rewrite alias rows.
+    The returned document is checked with ``build_index``.
+    """
+    source = require_object(document, "identity snapshot")
+    projected = json.loads(json.dumps(source))
+    version = projected.get("schema_version")
+    if version == BIOGRAPHY_IDENTITY_SCHEMA:
+        projected["schema_version"] = IDENTITY_SNAPSHOT_SCHEMA
+    elif version != IDENTITY_SNAPSHOT_SCHEMA:
+        raise UnsupportedSchemaVersionError(
+            "identity snapshot schema_version must be "
+            f"{IDENTITY_SNAPSHOT_SCHEMA} or {BIOGRAPHY_IDENTITY_SCHEMA}"
+        )
+    build_index(projected)
+    return projected
+
+
 def build_index(snapshot: dict) -> IdentityIndex:
     document = require_object(snapshot, "identity snapshot")
     require_schema(document, IDENTITY_SNAPSHOT_SCHEMA, "identity snapshot")
@@ -158,12 +183,13 @@ def build_index(snapshot: dict) -> IdentityIndex:
                 f"PersonAlias refers to Person {person_id}, which is not in the production index"
             )
         _alias_name, key = _production_name(row.get("name"), f"PersonAlias {alias_id}")
+        # Several alias rows for one person may collapse to one lookup key.
+        # The person is one candidate. The recorded alias id is the lowest id,
+        # so row order cannot change matched_alias_id. Both raw strings stay
+        # in exact_names. A second person with that key remains a second hit.
         previous = index._alias_ids.get((person_id, key))
-        if previous is not None and previous != alias_id:
-            raise ArtifactError(
-                f"Person {person_id} has conflicting alias ids for one normalized name"
-            )
-        index._alias_ids[(person_id, key)] = alias_id
+        if previous is None or alias_id < previous:
+            index._alias_ids[(person_id, key)] = alias_id
         remember_exact(_alias_name)
         current = index.names.setdefault(key, {})
         # A canonical hit stays canonical. The alias id is still stored.

@@ -1,0 +1,446 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/mention_run_comparison.v2.json",
+  "title": "Mention run comparison v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "operational_pipeline",
+    "pilot_is_ground_truth",
+    "precision_recall_computed",
+    "production_write_performed",
+    "human_approval_performed",
+    "apply_authorized",
+    "comparison_command",
+    "artifact_created_at",
+    "producer",
+    "logical_content_sha256",
+    "pilot_file_sha256",
+    "pilot_kind",
+    "mention_proposals_file_sha256",
+    "mention_proposals_logical_sha256",
+    "mention_proposals_schema_version",
+    "proposal_run_id",
+    "diagnostics_available",
+    "diagnostics_file_sha256",
+    "diagnostics_logical_sha256",
+    "diagnostics_schema_version",
+    "document_snapshot_file_sha256",
+    "official_snapshot_file_matches",
+    "source_equivalence",
+    "source_equivalence_summary",
+    "historical_corpus_recovery",
+    "corpus",
+    "metrics",
+    "detector_contribution",
+    "diagnostic_counts",
+    "unique_diagnostic_counts",
+    "items",
+    "disagreements",
+    "review_rows",
+    "diagnostic_rows",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "mention-run-comparison-v2"},
+    "kind": {"const": "MENTION_RUN_COMPARISON_NOT_OPERATIONAL"},
+    "operational_pipeline": {"const": false},
+    "pilot_is_ground_truth": {"const": false},
+    "precision_recall_computed": {"const": false},
+    "production_write_performed": {"const": false},
+    "human_approval_performed": {"const": false},
+    "apply_authorized": {"const": false},
+    "comparison_command": {"const": "compare-mention-runs"},
+    "artifact_created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "producer": {"$ref": "https://vs-archive.local/schemas/producer.v1.json"},
+    "logical_content_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "pilot_file_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "pilot_kind": {"type": "string", "minLength": 1},
+    "mention_proposals_file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "mention_proposals_logical_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "mention_proposals_schema_version": {"const": "mention-proposals-v1"},
+    "proposal_run_id": {"type": "string", "minLength": 1},
+    "diagnostics_available": {"type": "boolean"},
+    "diagnostics_file_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-fA-F]{64}$"},
+    "diagnostics_logical_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "diagnostics_schema_version": {
+      "anyOf": [{"const": "mention-proposal-diagnostics-v1"}, {"type": "null"}]
+    },
+    "document_snapshot_file_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "official_snapshot_file_matches": {"type": ["boolean", "null"]},
+    "source_equivalence": {
+      "enum": ["SOURCE_EQUIVALENT", "SOURCE_DRIFT", "SOURCE_EQUIVALENCE_UNKNOWN"]
+    },
+    "source_equivalence_summary": {"$ref": "#/$defs/sourceEquivalenceSummary"},
+    "historical_corpus_recovery": {"$ref": "#/$defs/historicalCorpusRecovery"},
+    "corpus": {"$ref": "#/$defs/corpus"},
+    "metrics": {"$ref": "#/$defs/metrics"},
+    "detector_contribution": {"$ref": "#/$defs/detectorContribution"},
+    "diagnostic_counts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diagnosticCount"}
+    },
+    "unique_diagnostic_counts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diagnosticCount"}
+    },
+    "items": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/item"}
+    },
+    "disagreements": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reviewRow"}
+    },
+    "review_rows": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reviewRow"}
+    },
+    "diagnostic_rows": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diagnosticRow"}
+    },
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-fA-F]{64}$"},
+    "sourceEquivalenceSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "comparable_pairs_status",
+        "noncomparable_source_pair_count",
+        "semantics"
+      ],
+      "properties": {
+        "comparable_pairs_status": {
+          "enum": [
+            "ALL_EQUIVALENT",
+            "HAS_SOURCE_DRIFT",
+            "HAS_UNKNOWN",
+            "NO_COMPARABLE_PAIRS"
+          ]
+        },
+        "noncomparable_source_pair_count": {"type": "integer", "minimum": 0},
+        "semantics": {"type": "string", "minLength": 1}
+      }
+    },
+    "historicalCorpusRecovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recovered_item_count",
+        "archive_item_ids_in_input_order",
+        "pilot_result",
+        "additional_recoverable_corpus_artifact_found",
+        "compared_corpus_matches_recovered_corpus",
+        "statement"
+      ],
+      "properties": {
+        "recovered_item_count": {"const": 10},
+        "archive_item_ids_in_input_order": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {"type": "integer"}
+        },
+        "pilot_result": {"const": "refined"},
+        "additional_recoverable_corpus_artifact_found": {"const": false},
+        "compared_corpus_matches_recovered_corpus": {"type": "boolean"},
+        "statement": {"type": "string", "minLength": 1}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_item_ids",
+        "pilot_archive_item_ids_in_input_order",
+        "item_count",
+        "sources"
+      ],
+      "properties": {
+        "archive_item_ids": {
+          "type": "array",
+          "items": {"type": "integer"}
+        },
+        "pilot_archive_item_ids_in_input_order": {
+          "type": "array",
+          "items": {"type": "integer"}
+        },
+        "item_count": {"type": "integer", "minimum": 0},
+        "sources": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/sourceRef"}
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archive_item_id", "evidence_source"],
+      "properties": {
+        "archive_item_id": {"type": "integer"},
+        "evidence_source": {"type": "string", "minLength": 1}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_item_count",
+        "pilot_mention_count",
+        "official_mention_count",
+        "comparable_pilot_mention_count",
+        "non_comparable_pilot_mention_count",
+        "exact_span_agreement_count",
+        "overlap_different_span_count",
+        "official_only_count",
+        "pilot_only_count",
+        "source_pairs_comparable",
+        "source_pairs_noncomparable",
+        "source_pairs_with_any_disagreement",
+        "official_noncomparable_source_mention_count",
+        "pilot_noncomparable_source_mention_count",
+        "same_span_name_surface_differs_count",
+        "same_span_title_surface_differs_count",
+        "same_span_surface_kind_differs_count",
+        "items_with_zero_pilot_mentions",
+        "items_with_zero_official_mentions",
+        "items_with_any_disagreement",
+        "items_with_source_drift",
+        "items_source_equivalent",
+        "items_source_equivalence_unknown",
+        "split_conflict_count",
+        "absorb_ambiguous_count",
+        "diagnostic_only_span_count",
+        "raw_diagnostic_record_count",
+        "unique_diagnostic_occurrence_count",
+        "unique_diagnostic_only_span_count"
+      ],
+      "properties": {
+        "corpus_item_count": {"type": "integer", "minimum": 0},
+        "pilot_mention_count": {"type": "integer", "minimum": 0},
+        "official_mention_count": {"type": "integer", "minimum": 0},
+        "comparable_pilot_mention_count": {"type": "integer", "minimum": 0},
+        "non_comparable_pilot_mention_count": {"type": "integer", "minimum": 0},
+        "exact_span_agreement_count": {"type": "integer", "minimum": 0},
+        "overlap_different_span_count": {"type": "integer", "minimum": 0},
+        "official_only_count": {"type": "integer", "minimum": 0},
+        "pilot_only_count": {"type": "integer", "minimum": 0},
+        "source_pairs_comparable": {"type": "integer", "minimum": 0},
+        "source_pairs_noncomparable": {"type": "integer", "minimum": 0},
+        "source_pairs_with_any_disagreement": {"type": "integer", "minimum": 0},
+        "official_noncomparable_source_mention_count": {"type": "integer", "minimum": 0},
+        "pilot_noncomparable_source_mention_count": {"type": "integer", "minimum": 0},
+        "same_span_name_surface_differs_count": {"type": "integer", "minimum": 0},
+        "same_span_title_surface_differs_count": {"type": "integer", "minimum": 0},
+        "same_span_surface_kind_differs_count": {"type": "integer", "minimum": 0},
+        "items_with_zero_pilot_mentions": {"type": "integer", "minimum": 0},
+        "items_with_zero_official_mentions": {"type": "integer", "minimum": 0},
+        "items_with_any_disagreement": {"type": "integer", "minimum": 0},
+        "items_with_source_drift": {"type": "integer", "minimum": 0},
+        "items_source_equivalent": {"type": "integer", "minimum": 0},
+        "items_source_equivalence_unknown": {"type": "integer", "minimum": 0},
+        "split_conflict_count": {"type": ["integer", "null"], "minimum": 0},
+        "absorb_ambiguous_count": {"type": ["integer", "null"], "minimum": 0},
+        "diagnostic_only_span_count": {"type": ["integer", "null"], "minimum": 0},
+        "raw_diagnostic_record_count": {"type": ["integer", "null"], "minimum": 0},
+        "unique_diagnostic_occurrence_count": {"type": ["integer", "null"], "minimum": 0},
+        "unique_diagnostic_only_span_count": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "detectorContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic_only_published_count",
+        "known_name_only_published_count",
+        "both_detectors_published_count",
+        "other_detector_published_count",
+        "known_name_exact_boundary_count",
+        "known_name_prefixed_count"
+      ],
+      "properties": {
+        "semantic_only_published_count": {"type": "integer", "minimum": 0},
+        "known_name_only_published_count": {"type": "integer", "minimum": 0},
+        "both_detectors_published_count": {"type": "integer", "minimum": 0},
+        "other_detector_published_count": {"type": "integer", "minimum": 0},
+        "known_name_exact_boundary_count": {"type": "integer", "minimum": 0},
+        "known_name_prefixed_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "diagnosticCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section", "reason", "count"],
+      "properties": {
+        "section": {"enum": ["rejected", "suppressed", "conflicts"]},
+        "reason": {"type": "string", "minLength": 1},
+        "count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_item_id",
+        "evidence_source",
+        "source_equivalence",
+        "pilot_body_sha256",
+        "official_body_sha256",
+        "pilot_mention_count",
+        "official_mention_count",
+        "comparable_pilot_mention_count",
+        "non_comparable_pilot_mention_count",
+        "exact_span_agreement_count",
+        "overlap_different_span_count",
+        "official_only_count",
+        "pilot_only_count",
+        "source_pair_comparable",
+        "official_noncomparable_source_mention_count",
+        "pilot_noncomparable_source_mention_count",
+        "has_disagreement"
+      ],
+      "properties": {
+        "archive_item_id": {"type": "integer"},
+        "evidence_source": {"type": "string", "minLength": 1},
+        "source_equivalence": {
+          "enum": ["SOURCE_EQUIVALENT", "SOURCE_DRIFT", "SOURCE_EQUIVALENCE_UNKNOWN"]
+        },
+        "pilot_body_sha256": {"$ref": "#/$defs/sha256"},
+        "official_body_sha256": {"$ref": "#/$defs/sha256"},
+        "pilot_mention_count": {"type": "integer", "minimum": 0},
+        "official_mention_count": {"type": "integer", "minimum": 0},
+        "comparable_pilot_mention_count": {"type": "integer", "minimum": 0},
+        "non_comparable_pilot_mention_count": {"type": "integer", "minimum": 0},
+        "exact_span_agreement_count": {"type": "integer", "minimum": 0},
+        "overlap_different_span_count": {"type": "integer", "minimum": 0},
+        "official_only_count": {"type": "integer", "minimum": 0},
+        "pilot_only_count": {"type": "integer", "minimum": 0},
+        "source_pair_comparable": {"type": "boolean"},
+        "official_noncomparable_source_mention_count": {"type": "integer", "minimum": 0},
+        "pilot_noncomparable_source_mention_count": {"type": "integer", "minimum": 0},
+        "has_disagreement": {"type": "boolean"}
+      }
+    },
+    "reviewRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_item_id",
+        "evidence_source",
+        "source_equivalence",
+        "category",
+        "comparison_reason",
+        "pilot_start_offset",
+        "pilot_end_offset",
+        "pilot_exact_mention",
+        "pilot_name_surface",
+        "pilot_title_surface",
+        "pilot_surface_kind",
+        "official_start_offset",
+        "official_end_offset",
+        "official_exact_mention",
+        "official_name_surface",
+        "official_title_surface",
+        "official_surface_kind",
+        "official_detector_ids",
+        "known_name_match_quality",
+        "diagnostic_reason",
+        "name_surface_relation",
+        "title_surface_relation",
+        "surface_kind_relation"
+      ],
+      "properties": {
+        "archive_item_id": {"type": "integer"},
+        "evidence_source": {"type": "string", "minLength": 1},
+        "source_equivalence": {
+          "enum": ["SOURCE_EQUIVALENT", "SOURCE_DRIFT", "SOURCE_EQUIVALENCE_UNKNOWN"]
+        },
+        "category": {
+          "enum": [
+            "BOTH_SAME_SPAN",
+            "BOTH_OVERLAP_DIFFERENT_SPAN",
+            "OFFICIAL_ONLY",
+            "PILOT_ONLY",
+            "OFFICIAL_SOURCE_NONCOMPARABLE",
+            "PILOT_SOURCE_NONCOMPARABLE",
+            "NON_COMPARABLE",
+            "DIAGNOSTIC_ONLY"
+          ]
+        },
+        "comparison_reason": {"type": "string", "minLength": 1},
+        "pilot_start_offset": {"type": ["integer", "null"], "minimum": 0},
+        "pilot_end_offset": {"type": ["integer", "null"], "minimum": 0},
+        "pilot_exact_mention": {"type": ["string", "null"]},
+        "pilot_name_surface": {"type": ["string", "null"]},
+        "pilot_title_surface": {"type": ["string", "null"]},
+        "pilot_surface_kind": {"type": ["string", "null"]},
+        "official_start_offset": {"type": ["integer", "null"], "minimum": 0},
+        "official_end_offset": {"type": ["integer", "null"], "minimum": 0},
+        "official_exact_mention": {"type": ["string", "null"]},
+        "official_name_surface": {"type": ["string", "null"]},
+        "official_title_surface": {"type": ["string", "null"]},
+        "official_surface_kind": {"type": ["string", "null"]},
+        "official_detector_ids": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "known_name_match_quality": {
+          "enum": ["EXACT_BOUNDARY", "PREFIXED", null]
+        },
+        "diagnostic_reason": {"type": ["string", "null"]},
+        "name_surface_relation": {"enum": ["SAME", "DIFFERENT", "UNAVAILABLE"]},
+        "title_surface_relation": {"enum": ["SAME", "DIFFERENT", "UNAVAILABLE"]},
+        "surface_kind_relation": {"enum": ["SAME", "DIFFERENT", "UNAVAILABLE"]}
+      }
+    },
+    "diagnosticRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "archive_item_id",
+        "evidence_source",
+        "surface",
+        "reason",
+        "segment_id",
+        "start_offset",
+        "end_offset",
+        "published_official_span"
+      ],
+      "properties": {
+        "section": {"enum": ["rejected", "suppressed", "conflicts"]},
+        "archive_item_id": {"type": "integer"},
+        "evidence_source": {"type": "string", "minLength": 1},
+        "surface": {"type": "string"},
+        "reason": {"type": "string", "minLength": 1},
+        "segment_id": {"type": ["string", "null"]},
+        "start_offset": {"type": ["integer", "null"], "minimum": 0},
+        "end_offset": {"type": ["integer", "null"], "minimum": 0},
+        "published_official_span": {"type": "boolean"}
+      }
+    }
+  }
+}
