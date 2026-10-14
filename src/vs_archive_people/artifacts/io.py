@@ -29,6 +29,9 @@ RUN_CHECKPOINT_V2_SCHEMA = "run-checkpoint-v2"
 DISCOVERY_SELECTION_SCHEMA = "discovery-selection-v1"
 MENTION_PROPOSALS_SCHEMA = "mention-proposals-v1"
 MENTION_PROPOSAL_DIAGNOSTICS_SCHEMA = "mention-proposal-diagnostics-v1"
+MENTION_RUN_COMPARISON_SCHEMA = "mention-run-comparison-v1"
+MENTION_RUN_COMPARISON_V2_SCHEMA = "mention-run-comparison-v2"
+MENTION_RUN_COMPARISON_V3_SCHEMA = "mention-run-comparison-v3"
 
 
 class ArtifactError(ValueError):

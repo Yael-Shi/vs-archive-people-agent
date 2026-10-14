@@ -137,6 +137,20 @@ python -m vs_archive_people.cli package-mention-proposals \
 
 `pilot-find-mentions` is an experimental Gemini surface detector for one displayed body. It is not automated mention finding, not a checkpoint step, and not a versioned artifact. See `docs/gemini-mention-pilot.md`.
 
+`compare-mention-runs` is a read-only evaluation command. It compares an already written pilot result with an already written `mention-proposals-v1` file. It does not call Gemini, and it is not a checkpoint step. Diagnostics are optional. The historical pilot corpus is archive items 22, 156, 182, 184, 268, 273, 288, 292, 297, and 323, in that order. See `docs/gemini-mention-pilot.md`.
+
+```bash
+python -m vs_archive_people.cli compare-mention-runs \
+  --pilot runs/gemini-mention-pilot.json \
+  --proposal runs/mention-proposals.json \
+  --diagnostics runs/mention-proposal-diagnostics.json \
+  --documents data/document_text_snapshot.json \
+  --output runs/mention-run-comparison.json \
+  --report runs/mention-run-comparison.md
+```
+
+`--diagnostics` and `--documents` may be omitted. Without diagnostics, diagnostic metrics are unavailable. Without the document snapshot that the proposal file is bound to, source equivalence stays unknown. The pilot result is not ground truth.
+
 Mention proposals for `freeze-evidence` are a JSON list, or an object with a `mentions` array. Each proposal needs `archive_item_id`, `evidence_source`, `start_offset`, `end_offset`, `exact_mention`, and `evidence_snippet`. Offsets are zero-based indexes into that displayed body, and the slice must equal `exact_mention`. Optional fields: `mention_class` (`PERSON` or `NOT_A_PERSON`), `propose_alias`, `proposed_identity_action` (`MERGE` or `CANONICAL_NAME_CHANGE`), and `confidence` (0–100). `mention_key`, `mention_fingerprint`, and `occurrence_index` are assigned when the evidence is frozen. A caller-supplied key, fingerprint, or occurrence index is discarded.
 
 ## Environment

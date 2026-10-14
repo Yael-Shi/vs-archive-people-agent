@@ -13,15 +13,17 @@ identity-review-package-v2. None of the v2 commands is a pipeline step.
 ``package-mention-proposals`` publishes
 mention-proposals-v1 from human geometry. ``find-mentions`` publishes the same
 artifact from automated detection, plus a diagnostic sidecar.
-``pilot-find-mentions`` is experimental. None of those commands is a pipeline
-step. Each output path is published atomically and is refused when it already
-exists.
+``pilot-find-mentions`` is experimental. ``compare-mention-runs`` compares
+stored pilot output with ``mention-proposals-v1``. It is evaluation only.
+None of those commands is a pipeline step. Each output path is published
+atomically and is refused when it already exists.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -30,6 +32,7 @@ from vs_archive_people.artifacts.io import (
     RUN_CHECKPOINT_SCHEMA,
     RUN_CHECKPOINT_V2_SCHEMA,
     ArtifactError,
+    ArtifactExistsError,
     InputHashChangedError,
     RunIdMismatchError,
     UnsupportedSchemaVersionError,
@@ -45,6 +48,8 @@ from vs_archive_people.artifacts.provenance import (
     verify_generated_artifact,
 )
 from vs_archive_people.discovery.select import select_items
+from vs_archive_people.evaluation.compare import build_mention_run_comparison
+from vs_archive_people.evaluation.report import render_comparison_report
 from vs_archive_people.evidence.package import build_evidence_package
 from vs_archive_people.evidence.package_v2 import build_evidence_package_v2
 from vs_archive_people.identity_review.package import build_review_package
@@ -497,6 +502,52 @@ def _command_checkpoint(args: argparse.Namespace, checkpoint_schema: str) -> int
     return 0
 
 
+def command_compare_mention_runs(args: argparse.Namespace) -> int:
+    """Compare stored pilot output with official proposals. Does not call a provider."""
+    if args.output.exists():
+        raise ArtifactExistsError(
+            f"refusing to overwrite existing artifact: {args.output}"
+        )
+    if args.report.exists():
+        raise ArtifactExistsError(
+            f"refusing to overwrite existing artifact: {args.report}"
+        )
+    proposals = read_json(args.proposal)
+    diagnostics = read_json(args.diagnostics) if args.diagnostics else None
+    documents = read_json(args.documents) if args.documents else None
+    discovery = read_json(args.discovery) if args.discovery else None
+    document = build_mention_run_comparison(
+        read_json(args.pilot),
+        proposals,
+        pilot_file_sha256=sha256_file(args.pilot),
+        mention_proposals_file_sha256=sha256_file(args.proposal),
+        diagnostics=diagnostics,
+        diagnostics_file_sha256=sha256_file(args.diagnostics)
+        if args.diagnostics
+        else None,
+        document_snapshot=documents,
+        document_snapshot_file_sha256=sha256_file(args.documents)
+        if args.documents
+        else None,
+        discovery=discovery,
+        discovery_file_sha256=sha256_file(args.discovery) if args.discovery else None,
+    )
+    digest = write_json_atomic(args.output, document)
+    _write_text_once(args.report, render_comparison_report(document))
+    _ok(
+        {
+            "output_sha256": digest,
+            "logical_content_sha256": document["logical_content_sha256"],
+            "schema_version": document["schema_version"],
+            "corpus_item_count": document["metrics"]["corpus_item_count"],
+            "source_equivalence": document["source_equivalence"],
+            "diagnostics_available": document["diagnostics_available"],
+            "report": str(args.report),
+        }
+    )
+    return 0
+
+
 def command_checkpoint(args: argparse.Namespace) -> int:
     """Record the next v1 checkpoint. Does not approve or apply identity."""
     return _command_checkpoint(args, RUN_CHECKPOINT_SCHEMA)
@@ -505,6 +556,21 @@ def command_checkpoint(args: argparse.Namespace) -> int:
 def command_checkpoint_v2(args: argparse.Namespace) -> int:
     """Record the next v2 checkpoint. Review completion is not human approval."""
     return _command_checkpoint(args, RUN_CHECKPOINT_V2_SCHEMA)
+
+
+def _write_text_once(path: Path, text: str) -> None:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError as exc:
+        raise ArtifactExistsError(
+            f"refusing to overwrite existing artifact: {destination}"
+        ) from exc
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def _ok(payload: dict) -> None:
@@ -627,6 +693,22 @@ def build_parser() -> argparse.ArgumentParser:
     finder.add_argument("--output", type=Path, required=True)
     finder.add_argument("--diagnostics", type=Path, required=True)
     finder.set_defaults(func=command_find_mentions)
+
+    compare = commands.add_parser(
+        "compare-mention-runs",
+        help=(
+            "Compare a stored mention pilot with mention-proposals-v1. "
+            "Read-only evaluation. Not a pipeline step and not a provider call."
+        ),
+    )
+    compare.add_argument("--pilot", type=Path, required=True)
+    compare.add_argument("--proposal", type=Path, required=True)
+    compare.add_argument("--diagnostics", type=Path)
+    compare.add_argument("--documents", type=Path)
+    compare.add_argument("--discovery", type=Path)
+    compare.add_argument("--output", type=Path, required=True)
+    compare.add_argument("--report", type=Path, required=True)
+    compare.set_defaults(func=command_compare_mention_runs)
 
     _add_checkpoint_command(
         commands,

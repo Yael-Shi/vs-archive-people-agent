@@ -52,9 +52,11 @@ Resolution indexes:
 
 `stable_key` is not compared to mention text. `Person.biography` is not copied. Rows with `review_status` `PENDING` are excluded from the production index. `PhotoPerson` rows are counted as ignored and are never emitted. `ArchiveItemPerson` is not a name index in this slice.
 
-Extra export fields may remain on a row. The resolver still fails closed when an invariant it depends on is broken: duplicate `Person.id`, duplicate `PersonAlias.id`, duplicate binding id, an alias or binding that points at a Person that is not in the production index, a blank name or a name that normalizes to nothing, two alias ids for one person and one normalized name, or one `stable_key` bound to two people. Identical repeated bindings for the same person and key are one binding.
+Extra export fields may remain on a row. The resolver still fails closed when an invariant it depends on is broken: duplicate `Person.id`, duplicate `PersonAlias.id`, duplicate binding id, an alias or binding that points at a Person that is not in the production index, a blank name or a name that normalizes to nothing, or one `stable_key` bound to two people. Identical repeated bindings for the same person and key are one binding.
 
-When a person's canonical name and alias normalize to the same string, the match stays `matched_via = canonical_name`. The alias id is retained for lookup and is not a second person. When that same normalized alias belongs to more than one production person, the mention is `AMBIGUOUS`. One person may have several stable keys. They are stored in sorted order and shown together on a match. Shared names are not collapsed.
+Several `PersonAlias` rows for one Person may normalize to the same lookup key. That is one person, not a conflict. `matched_alias_id` is the lowest alias id among those rows. Every original alias string stays in the exact-name list used by known-name search. Row order does not change the chosen id. The same normalized key on two different production people stays two hits, and the mention is `AMBIGUOUS`. `matched_alias_id` is null for an ambiguous match.
+
+When a person's canonical name and alias normalize to the same string, the match stays `matched_via = canonical_name`. The alias id is retained for lookup and is not a second person. `matched_alias_id` stays null on a canonical match. When that same normalized alias belongs to more than one production person, the mention is `AMBIGUOUS`. One person may have several stable keys. They are stored in sorted order and shown together on a match. Shared names are not collapsed.
 
 A deterministic match is an exact normalized name hit on exactly one production person. Normalization is NFKC, casefold, and whitespace collapse. Titles are not stripped, and names are not fuzzy-matched. Row order in the export does not change the index.
 
@@ -158,6 +160,50 @@ Each row has `archive_item_id`, `evidence_source`, `surface`, `reason`, and `seg
 `conflicts` reasons: `SPLIT_CONFLICT`, `ABSORB_AMBIGUOUS`.
 
 The sidecar does not store raw provider JSON, prompt text, an API key, token counts, or response bodies. There is no two-file transaction. If the proposal link succeeds and the sidecar link fails, the proposal stays. Stdout is `status` `PROPOSAL_PUBLISHED`, `error_code` `DIAGNOSTICS_PUBLICATION_FAILED`, the proposal path, both proposal hashes, and `diagnostics_published` false. The process exits nonzero. An existing proposal destination fails before publication and writes no sidecar.
+
+## mention-run-comparison-v1
+
+File: `src/vs_archive_people/schemas/mention_run_comparison.v1.json`.
+
+Written by `compare-mention-runs`. This is evaluation output. It is not an input to discover, freeze, resolve, review, or either checkpoint. It is not listed in `RUN_STEPS` or in the checkpoint schema maps. `kind` is `MENTION_RUN_COMPARISON_NOT_OPERATIONAL`. `operational_pipeline`, `pilot_is_ground_truth`, `precision_recall_computed`, `production_write_performed`, `human_approval_performed`, and `apply_authorized` are false.
+
+The command reads a stored pilot result and a generated `mention-proposals-v1` file. It does not call a provider. `--diagnostics` may be omitted. When it is omitted, `diagnostics_available` is false and `split_conflict_count`, `absorb_ambiguous_count`, and `diagnostic_only_span_count` are null. When it is present, the sidecar must be `mention-proposal-diagnostics-v1`, its logical hash must match, and its proposal logical hash and proposal file hash must match the proposal being compared. A mismatch is `INPUT_HASH_CHANGED`.
+
+`--documents` may be omitted. Source equivalence uses the SHA-256 of the exact UTF-8 displayed body, the same digest as pilot `body_sha256`. It is `SOURCE_EQUIVALENT` only when the pilot body hash and the official body hash are both known and equal. It is `SOURCE_DRIFT` when both are known and differ. It is `SOURCE_EQUIVALENCE_UNKNOWN` when either hash is missing, or when the snapshot file hash does not equal the proposal's `document_snapshot_file_sha256`. Archive item id alone is not equivalence.
+
+Occurrence identity is `archive_item_id`, `evidence_source`, `start_offset`, and `end_offset`. Comparable rows are `BOTH_SAME_SPAN`, `BOTH_OVERLAP_DIFFERENT_SPAN`, `OFFICIAL_ONLY`, or `PILOT_ONLY`. The same outer span can still differ in name surface, title surface, or surface kind. A pilot row without recoverable offsets is `NON_COMPARABLE`. A diagnostic span that was not published is `DIAGNOSTIC_ONLY`. Diagnostic counts use the reason strings stored in the sidecar. They are not a fixed list of codes.
+
+The same command writes a Markdown review report. That report is not a versioned artifact. Existing output and report paths are refused. Each disagreement row includes `source_equivalence` for that item and evidence source.
+
+`historical_corpus_recovery` records the recovered 10-item Gemini mention-pilot corpus and that no additional recoverable corpus artifact was found. That statement does not claim no other corpus ever existed. `compared_corpus_matches_recovered_corpus` is true only when the pilot input order is exactly those ten archive item ids.
+
+A wrong proposal schema is `UNSUPPORTED_SCHEMA_VERSION`. A logical-hash mismatch on the proposal or the diagnostics file is `LOGICAL_HASH_MISMATCH`.
+
+## mention-run-comparison-v2
+
+File: `src/vs_archive_people/schemas/mention_run_comparison.v2.json`.
+
+`compare-mention-runs` now writes this schema. `mention-run-comparison-v1` remains the schema of the first comparison contract and is not rewritten. v2 is still evaluation output. It is not in `RUN_STEPS` or either checkpoint schema map. It does not call a provider.
+
+Comparison identity is `archive_item_id` plus `evidence_source`. A source role that exists on only one side, with no evidence that the other run evaluated that same role, is `OFFICIAL_SOURCE_NONCOMPARABLE` or `PILOT_SOURCE_NONCOMPARABLE`. Those mentions stay in `review_rows` and are excluded from `official_only_count`, `pilot_only_count`, overlap counts, `disagreements`, and disagreement item or source-pair counts. `source_pairs_comparable` and `source_pairs_noncomparable` count those pairs.
+
+Per-source `source_equivalence` stays authoritative for that pair. A one-sided role stays `SOURCE_EQUIVALENCE_UNKNOWN` because the other body hash is absent. That status is not copied onto a different role. The aggregate `source_equivalence` rolls up comparable pairs only. `source_equivalence_summary.comparable_pairs_status` is `ALL_EQUIVALENT` when every comparable pair is `SOURCE_EQUIVALENT`, including when extra non-comparable roles exist. `noncomparable_source_pair_count` records those extra roles.
+
+`diagnostic_counts` and `diagnostic_rows` keep every diagnostic record, including exact duplicates. `unique_diagnostic_counts` and `unique_diagnostic_occurrence_count` collapse records that share archive item, evidence source, section, reason, offsets, surface, and segment id. Diagnostic-only review rows use that unique occurrence. The Markdown report escapes `|`, newlines, and carriage returns in table cells. JSON strings are unchanged.
+
+`overlap_different_span_count` counts the pilot and official mention rows that sit in an overlap-different-span group. One pilot row overlapping one official row counts as 2, not as one adjudication case.
+
+## mention-run-comparison-v3
+
+File: `src/vs_archive_people/schemas/mention_run_comparison.v3.json`.
+
+`compare-mention-runs` now writes this schema. The v1 and v2 schema files are not rewritten. v3 is evaluation output. It is not in `RUN_STEPS` or either checkpoint schema map. It does not call a provider.
+
+Official evaluation of one `archive_item_id` and `evidence_source` requires positive evidence: an official mention for that pair, an official diagnostic for that pair, or both of the following. The supplied document snapshot file hash equals `mention-proposals-v1.document_snapshot_file_sha256`, and a verified `discovery-selection-v1` selects that archive item. The discovery logical hash, discovery file hash, discovery run id, and discovery document-snapshot hash must match the proposal. The displayed role must be the first text role of a displayed body, which is the role `find-mentions` runs. A body that merely exists in the snapshot does not prove the item was selected. A missing or mismatched snapshot does not prove evaluation. `SOURCE_EQUIVALENCE_UNKNOWN` does not prove evaluation.
+
+`--discovery` may be omitted. When it is omitted, a source with no official mention and no diagnostic is non-comparable. The artifact records `discovery_available` and the discovery hashes when the file is supplied.
+
+`overlap_different_span_count` has the same meaning as in v2: it counts mention rows in those groups, so one pilot row overlapping one official row counts as 2.
 
 ## evidence-package-v1
 

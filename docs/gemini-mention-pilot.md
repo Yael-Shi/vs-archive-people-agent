@@ -183,3 +183,28 @@ The structured-output schema was accepted in live pilot runs, including corpus i
 Retries belong to `google-genai`. The client sets `HttpRetryOptions(attempts=3)` and leaves status codes, initial delay, max delay, exponential base, and jitter unset, so the SDK's default transient-status list and backoff apply. Three is the total number of attempts, including the first call. The request timeout stays 120000 ms.
 
 `people-agent` calls `generate_content` once per batch. It has no second retry loop and no sleep. After the SDK finishes its retries, `google.genai.errors.APIError` (including `ClientError` and `ServerError`) becomes `PilotProviderError` with `error_code` `PILOT_PROVIDER`. The message may include the SDK class name, the integer `code`, and a `status` that is only letters, digits, and underscores. Response details, the prompt, and the document body are not copied. `UnknownApiResponseError` becomes a fixed unreadable-response message. `httpx.RequestError`, which the SDK can raise for timeout and transport failure without wrapping, becomes `provider transport failed: <exception class>`. Other exceptions, including programmer errors, propagate. The original exception is not chained, because its text can contain the request.
+
+## Corpus used for comparison
+
+The first official pilot evaluation used ten archive items, in this order:
+
+| Archive item | Evidence source |
+| --- | --- |
+| 22 | `ocr_document.displayed_transcription.text` |
+| 156 | `ocr_document.displayed_transcription.text` |
+| 182 | `ocr_document.displayed_transcription.text` |
+| 184 | `ocr_document.displayed_transcription.text` |
+| 268 | `ocr_document.displayed_transcription.text` |
+| 273 | `ocr_document.displayed_transcription.text` |
+| 288 | `manual_text.body` |
+| 292 | `ocr_document.displayed_transcription.text` |
+| 297 | `ocr_document.displayed_transcription.text` |
+| 323 | `ocr_document.displayed_transcription.text` |
+
+The selection file is `gemini_real_pilot_selection_2026-10-11.json`. The refined pilot result, including the displayed body used for each item, is `gemini_real_pilot_results_refined_2026-10-12.json`. An earlier result from 2026-10-11 is also stored. Those files are local evaluation artifacts. They are not versioned pipeline artifacts and they are not rewritten by `compare-mention-runs`.
+
+The displayed bodies in the refined result match the 2026-08-29 live-text export `vs_archive_live_texts_20260829T185444Z.json` for these ten items. That export is schema version `1`. It is not itself `document-text-snapshot-v1`. The historical identity file is `vs-archive-biography-production-identity-snapshot-v1`. It is not `identity-snapshot-v1`.
+
+`compare-mention-runs` can read the refined pilot file. It does not call Gemini. An official `mention-proposals-v1` run over this corpus was not found in the repository or in the broader filesystem search. That search also found no additional recoverable pilot corpus artifact. This does not establish that no other corpus ever existed.
+
+The displayed bodies for these ten items were copied, without changing the text, into ignored `data/mention-corpus-2026-10-11/document_text_snapshot.json` as `document-text-snapshot-v1`. `discover` wrote ignored `runs/mention-corpus-2026-10-11/discovery.json` for exactly those ids. The historical identity file is still `vs-archive-biography-production-identity-snapshot-v1`. `project_to_identity_snapshot_v1` copies it to `identity-snapshot-v1` without dropping alias rows. Same-person alias strings that normalize together stay one person. See ADR-041.

@@ -700,3 +700,87 @@ The v2 artifacts are a second contract, not a replacement of an in-flight v1 run
 ### Consequences
 
 `published_schema_versions()` remains the v1 map. The v2 map is requested explicitly. Same-run resume of the other generation is `UNSUPPORTED_SCHEMA_VERSION`. An incomplete prior checkpoint of either generation is `INCOMPLETE_PRIOR_CHECKPOINT`. See `docs/contracts.md`.
+
+## ADR-041 — same-person alias duplicates are one lookup
+
+- Date: 2026-10-14
+- Status: Accepted
+
+### Decision
+
+`build_index` treats multiple `PersonAlias` rows that normalize to one key and point at one Person as one identity candidate. `matched_alias_id` is the lowest alias id in that group. Both raw alias strings remain exact known-name search strings. The snapshot rows are not deleted or rewritten.
+
+The same normalized key on two different production people stays ambiguous. `matched_alias_id` is null unless the match is one person reached through `person_alias`.
+
+`project_to_identity_snapshot_v1` copies a biography identity export by setting `schema_version` to `identity-snapshot-v1`. It does not remove names.
+
+### Rationale
+
+Normalization already collapses whitespace, including a line break. Two alias records for one person are two spellings of one lookup surface, not two people. Failing the index on that pair blocks a faithful snapshot without changing who the name refers to. Choosing the lowest alias id is stable if the export row order changes. A shared name across people is still not one person.
+
+### Consequences
+
+A biography export can be projected into `identity-snapshot-v1` without editing alias text. Known-name detection still searches every original alias string. See `docs/contracts.md`.
+
+## ADR-042 — comparison is by source role
+
+- Date: 2026-10-14
+- Status: Accepted
+
+### Decision
+
+`compare-mention-runs` writes `mention-run-comparison-v2`. A mention is comparable only when both runs evaluated the same `archive_item_id` and `evidence_source`. A role present on only one side is `OFFICIAL_SOURCE_NONCOMPARABLE` or `PILOT_SOURCE_NONCOMPARABLE`. Those rows are omitted from official-only, pilot-only, overlap, and disagreement counts.
+
+Aggregate `source_equivalence` summarizes comparable pairs only. `source_equivalence_summary` records whether those pairs are all equivalent and how many non-comparable roles remain. Per-source status stays on the pair.
+
+Exact duplicate diagnostic records stay in the raw diagnostic list. Unique occurrence counts use archive item, evidence source, section, reason, offsets, surface, and segment id. Markdown table cells escape pipes and line breaks without changing the JSON strings.
+
+### Rationale
+
+The historical pilot for item 292 read `ocr_document.displayed_transcription.text`. The official run also published `ocr_document.displayed_hebrew_translation.text`. Counting those Hebrew mentions as `OFFICIAL_ONLY` treats an unevaluated source as a detector disagreement. Duplicate diagnostic rows were already in the sidecar. A review table must stay one row per logical result when the source text contains a line break or a pipe.
+
+### Consequences
+
+The first published comparison file remains `mention-run-comparison-v1` and is not overwritten. Later comparisons use v2. This does not change mention finding. See `docs/contracts.md`.
+
+## ADR-043 — official evaluation needs positive evidence
+
+- Date: 2026-10-14
+- Status: Accepted
+
+### Decision
+
+`compare-mention-runs` writes `mention-run-comparison-v3`. A pilot source is not officially evaluated merely because the document snapshot is missing or its file hash does not match the proposal. Official evaluation of one archive item and evidence source requires an official mention, an official diagnostic, or a proposal-bound discovery selection together with the matching snapshot role that `find-mentions` runs. A displayed body in the snapshot does not by itself prove the item was selected.
+
+`overlap_different_span_count` counts mention rows in an overlap group. One pilot row overlapping one official row counts as 2. No new metric is added for unique adjudication cases.
+
+### Rationale
+
+Treating a missing snapshot as evaluation turned a one-sided pilot source into `PILOT_ONLY`. `find-mentions` runs every displayed body of a discovery-selected item, including bodies that publish no mention and no diagnostic. The snapshot alone does not name that selection. The discovery file already stored on the proposal is the selection evidence.
+
+### Consequences
+
+v1 and v2 schema files stay as published. `--discovery` is optional and evaluation-only. It is not a `RUN_STEPS` entry. See `docs/contracts.md`.
+
+## ADR-040 — corpus comparison precedes pilot/v1 retirement
+
+- Date: 2026-10-13
+- Status: Accepted
+
+### Decision
+
+Official v2 is now end-to-end: `discover -> find-mentions -> freeze-evidence-v2 -> resolve-v2 -> review-v2 -> checkpoint-v2`. The logical checkpoint steps remain `discover -> freeze-evidence -> resolve -> review`.
+
+`compare-mention-runs` is a read-only evaluation of already written mention output. It publishes `mention-run-comparison-v1` and a Markdown review report. It is not a `RUN_STEPS` entry and it is not in either checkpoint schema map. It does not call Gemini or any other provider.
+
+The historical mention-pilot output is not automatically ground truth. The comparison does not report precision or recall unless a separate human-reviewed ground truth exists. Detector disagreement is a review packet, not an adjudication. Source drift is recorded separately from detector differences. No component is retired from aggregate counts. Retirement of the pilot or of v1 happens only after that comparison evidence has been reviewed.
+
+The first pilot corpus, in selection order, is archive items 22, 156, 182, 184, 268, 273, 288, 292, 297, and 323. Item 288 uses `manual_text.body`. The other nine use `ocr_document.displayed_transcription.text`.
+
+### Rationale
+
+The official finder and the pilot can both be wrong. Retiring one because it produced fewer rows, or treating the pilot as the answer key, would hide source drift and unresolved spans. A frozen comparison can be repeated without another model call.
+
+### Consequences
+
+`mention-run-comparison-v1` uses the existing provenance stamp and logical hash, and it stays in the evaluation namespace. Wrong or hash-mismatched official artifacts fail closed. Missing diagnostics do not block the comparison; diagnostic metrics stay unavailable. See `docs/contracts.md` and `docs/gemini-mention-pilot.md`.
