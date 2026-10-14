@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/mention_adjudication_decisions.v1.json",
+  "title": "Mention adjudication decisions v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "adjudication_schema_version",
+    "adjudication_logical_sha256",
+    "adjudication_file_sha256",
+    "production_write_performed",
+    "apply_authorized",
+    "tuning_performed",
+    "human_approval_performed",
+    "decisions"
+  ],
+  "properties": {
+    "schema_version": {"const": "mention-adjudication-decisions-v1"},
+    "kind": {"const": "MENTION_ADJUDICATION_DECISIONS_NOT_OPERATIONAL"},
+    "adjudication_schema_version": {"const": "mention-adjudication-v1"},
+    "adjudication_logical_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "adjudication_file_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "production_write_performed": {"const": false},
+    "apply_authorized": {"const": false},
+    "tuning_performed": {"const": false},
+    "human_approval_performed": {"const": false},
+    "decisions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/decision"}
+    }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "decision", "reviewer_note"],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^C[0-9]{4}$"
+        },
+        "decision": {
+          "enum": [
+            "OFFICIAL_PREFERRED",
+            "PILOT_PREFERRED",
+            "BOTH_ACCEPTABLE",
+            "BOTH_WRONG",
+            "NOT_A_PERSON",
+            "NEEDS_RESEARCH",
+            null
+          ]
+        },
+        "reviewer_note": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

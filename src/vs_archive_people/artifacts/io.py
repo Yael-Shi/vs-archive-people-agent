@@ -32,6 +32,8 @@ MENTION_PROPOSAL_DIAGNOSTICS_SCHEMA = "mention-proposal-diagnostics-v1"
 MENTION_RUN_COMPARISON_SCHEMA = "mention-run-comparison-v1"
 MENTION_RUN_COMPARISON_V2_SCHEMA = "mention-run-comparison-v2"
 MENTION_RUN_COMPARISON_V3_SCHEMA = "mention-run-comparison-v3"
+MENTION_ADJUDICATION_SCHEMA = "mention-adjudication-v1"
+MENTION_ADJUDICATION_DECISIONS_SCHEMA = "mention-adjudication-decisions-v1"
 
 
 class ArtifactError(ValueError):

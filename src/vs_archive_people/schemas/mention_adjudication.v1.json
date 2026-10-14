@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vs-archive.local/schemas/mention_adjudication.v1.json",
+  "title": "Mention adjudication v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "operational_pipeline",
+    "pilot_is_ground_truth",
+    "precision_recall_computed",
+    "production_write_performed",
+    "human_approval_performed",
+    "apply_authorized",
+    "tuning_performed",
+    "adjudication_command",
+    "artifact_created_at",
+    "producer",
+    "logical_content_sha256",
+    "comparison_schema_version",
+    "comparison_logical_sha256",
+    "comparison_file_sha256",
+    "summary",
+    "cases",
+    "decisions",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "mention-adjudication-v1"},
+    "kind": {"const": "MENTION_ADJUDICATION_NOT_OPERATIONAL"},
+    "operational_pipeline": {"const": false},
+    "pilot_is_ground_truth": {"const": false},
+    "precision_recall_computed": {"const": false},
+    "production_write_performed": {"const": false},
+    "human_approval_performed": {"const": false},
+    "apply_authorized": {"const": false},
+    "tuning_performed": {"const": false},
+    "adjudication_command": {"const": "package-mention-adjudication"},
+    "artifact_created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "producer": {"$ref": "https://vs-archive.local/schemas/producer.v1.json"},
+    "logical_content_sha256": {"$ref": "#/$defs/sha256"},
+    "comparison_schema_version": {"const": "mention-run-comparison-v3"},
+    "comparison_logical_sha256": {"$ref": "#/$defs/sha256"},
+    "comparison_file_sha256": {"$ref": "#/$defs/sha256"},
+    "summary": {"$ref": "#/$defs/summary"},
+    "cases": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/case"}
+    },
+    "decisions": {
+      "type": "array",
+      "const": [
+        "OFFICIAL_PREFERRED",
+        "PILOT_PREFERRED",
+        "BOTH_ACCEPTABLE",
+        "BOTH_WRONG",
+        "NOT_A_PERSON",
+        "NEEDS_RESEARCH"
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_case_count",
+        "case_type_counts",
+        "items_represented",
+        "item_count",
+        "source_pairs_represented",
+        "source_pair_count",
+        "cases_with_diagnostics",
+        "cases_with_known_name_only_official_detection",
+        "cases_involving_split_conflicts",
+        "noncomparable_case_count",
+        "overlap_review_row_count",
+        "overlap_logical_case_count",
+        "overlap_review_rows_collapsed",
+        "raw_diagnostic_record_count",
+        "unique_diagnostic_occurrence_count"
+      ],
+      "properties": {
+        "logical_case_count": {"type": "integer", "minimum": 0},
+        "case_type_counts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["case_type", "count"],
+            "properties": {
+              "case_type": {"$ref": "#/$defs/caseType"},
+              "count": {"type": "integer", "minimum": 1}
+            }
+          }
+        },
+        "items_represented": {
+          "type": "array",
+          "items": {"type": "integer"}
+        },
+        "item_count": {"type": "integer", "minimum": 0},
+        "source_pairs_represented": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["archive_item_id", "evidence_source"],
+            "properties": {
+              "archive_item_id": {"type": "integer"},
+              "evidence_source": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "source_pair_count": {"type": "integer", "minimum": 0},
+        "cases_with_diagnostics": {"type": "integer", "minimum": 0},
+        "cases_with_known_name_only_official_detection": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cases_involving_split_conflicts": {"type": "integer", "minimum": 0},
+        "noncomparable_case_count": {"type": "integer", "minimum": 0},
+        "overlap_review_row_count": {"type": "integer", "minimum": 0},
+        "overlap_logical_case_count": {"type": "integer", "minimum": 0},
+        "overlap_review_rows_collapsed": {"type": "integer", "minimum": 0},
+        "raw_diagnostic_record_count": {"type": "integer", "minimum": 0},
+        "unique_diagnostic_occurrence_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "caseType": {
+      "enum": [
+        "PILOT_ONLY",
+        "OFFICIAL_ONLY",
+        "OVERLAP_DIFFERENT_SPAN",
+        "SAME_SPAN_SURFACE_DIFFERENCE",
+        "SAME_SPAN_KNOWN_NAME_ONLY",
+        "SPLIT_CONFLICT",
+        "DIAGNOSTIC_SUPPRESSION",
+        "NONCOMPARABLE_SOURCE",
+        "NONCOMPARABLE_PILOT_ROW"
+      ]
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "archive_item_id",
+        "evidence_source",
+        "source_equivalence",
+        "case_type",
+        "comparison_reason",
+        "review_row_count",
+        "pilot_spans",
+        "official_spans",
+        "diagnostics",
+        "review_status",
+        "decision",
+        "reviewer_note"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^C[0-9]{4}$"
+        },
+        "archive_item_id": {"type": "integer"},
+        "evidence_source": {"type": "string", "minLength": 1},
+        "source_equivalence": {
+          "enum": [
+            "SOURCE_EQUIVALENT",
+            "SOURCE_DRIFT",
+            "SOURCE_EQUIVALENCE_UNKNOWN"
+          ]
+        },
+        "case_type": {"$ref": "#/$defs/caseType"},
+        "comparison_reason": {"type": "string", "minLength": 1},
+        "review_row_count": {"type": "integer", "minimum": 0},
+        "pilot_spans": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/pilotSpan"}
+        },
+        "official_spans": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/officialSpan"}
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/diagnostic"}
+        },
+        "review_status": {"const": "PENDING"},
+        "decision": {"type": "null"},
+        "reviewer_note": {"type": "null"}
+      }
+    },
+    "pilotSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_offset",
+        "end_offset",
+        "exact_mention",
+        "name_surface",
+        "title_surface",
+        "surface_kind"
+      ],
+      "properties": {
+        "start_offset": {"type": ["integer", "null"], "minimum": 0},
+        "end_offset": {"type": ["integer", "null"], "minimum": 0},
+        "exact_mention": {"type": ["string", "null"]},
+        "name_surface": {"type": ["string", "null"]},
+        "title_surface": {"type": ["string", "null"]},
+        "surface_kind": {"type": ["string", "null"]}
+      }
+    },
+    "officialSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_offset",
+        "end_offset",
+        "exact_mention",
+        "name_surface",
+        "title_surface",
+        "surface_kind",
+        "detector_ids",
+        "known_name_match_quality"
+      ],
+      "properties": {
+        "start_offset": {"type": "integer", "minimum": 0},
+        "end_offset": {"type": "integer", "minimum": 0},
+        "exact_mention": {"type": "string"},
+        "name_surface": {"type": ["string", "null"]},
+        "title_surface": {"type": ["string", "null"]},
+        "surface_kind": {"type": ["string", "null"]},
+        "detector_ids": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "known_name_match_quality": {
+          "enum": ["EXACT_BOUNDARY", "PREFIXED", null]
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "reason",
+        "surface",
+        "start_offset",
+        "end_offset",
+        "segment_id",
+        "published_official_span"
+      ],
+      "properties": {
+        "section": {"enum": ["rejected", "suppressed", "conflicts"]},
+        "reason": {"type": "string", "minLength": 1},
+        "surface": {"type": "string"},
+        "start_offset": {"type": ["integer", "null"], "minimum": 0},
+        "end_offset": {"type": ["integer", "null"], "minimum": 0},
+        "segment_id": {"type": ["string", "null"]},
+        "published_official_span": {"type": "boolean"}
+      }
+    }
+  }
+}

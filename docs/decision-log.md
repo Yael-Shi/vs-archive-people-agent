@@ -762,6 +762,25 @@ Treating a missing snapshot as evaluation turned a one-sided pilot source into `
 
 v1 and v2 schema files stay as published. `--discovery` is optional and evaluation-only. It is not a `RUN_STEPS` entry. See `docs/contracts.md`.
 
+## ADR-044 — mention comparison disagreements require explicit human adjudication before tuning
+
+- Date: 2026-10-14
+- Status: Accepted
+
+### Decision
+
+`package-mention-adjudication` writes `mention-adjudication-v1` from `mention-run-comparison-v3` only. Comparison review rows are not human cases one-to-one. Overlap rows in one connected component are one case. Diagnostics are evidence on a related occurrence, not a decision, and become a standalone case only when no mention case matches. Every case begins `PENDING` with a null decision.
+
+Human decisions are a separate `mention-adjudication-decisions-v1` file bound to the packet logical hash. That file is not stamped. This phase does not tune the finder, change prompts, split rules, suppressions, or known-name behavior, retire the pilot or v1, change production identity, create Person or alias records, merge identities, or authorize apply.
+
+### Rationale
+
+The comparison already showed that one disagreement can be two directional rows, and that a diagnostic can describe the same span as a pilot-only mention. Treating each row as a verdict would double-count overlap and would treat a suppression reason as an approval. The pilot is not ground truth, and known-name support is not a decision.
+
+### Consequences
+
+The adjudication packet is immutable generated evidence. Later review edits the decision file. That file is valid for downstream use only when `require_mention_adjudication_decisions` accepts it: the packet hashes match, and the decision case ids are exactly the packet case ids, once each. Row order is not meaningful. A diagnostic that overlaps more than one logical case stays a standalone case and is not assigned by span length or case order. No downstream tuning reads those decisions yet. See `docs/contracts.md`.
+
 ## ADR-040 — corpus comparison precedes pilot/v1 retirement
 
 - Date: 2026-10-13
