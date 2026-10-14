@@ -205,6 +205,40 @@ Official evaluation of one `archive_item_id` and `evidence_source` requires posi
 
 `overlap_different_span_count` has the same meaning as in v2: it counts mention rows in those groups, so one pilot row overlapping one official row counts as 2.
 
+## mention-adjudication-v1
+
+File: `src/vs_archive_people/schemas/mention_adjudication.v1.json`.
+
+Written by `package-mention-adjudication`. This is a pending human-review packet. It is not an input to discover, freeze, resolve, review, or either checkpoint. It is not listed in `RUN_STEPS` or in the checkpoint schema maps. `kind` is `MENTION_ADJUDICATION_NOT_OPERATIONAL`. `operational_pipeline`, `pilot_is_ground_truth`, `precision_recall_computed`, `production_write_performed`, `human_approval_performed`, `apply_authorized`, and `tuning_performed` are false.
+
+The command reads only `mention-run-comparison-v3`. It does not call a provider, reopen a document snapshot, reopen an identity snapshot, or modify the comparison. The parent is the comparison logical hash. `comparison_file_sha256` is an audit hash of the comparison file and is excluded from this packet's logical hash. A wrong comparison schema is `UNSUPPORTED_SCHEMA_VERSION`. A logical-hash mismatch on the comparison is `LOGICAL_HASH_MISMATCH`.
+
+Comparison review rows are not cases one-to-one. Rows are grouped inside one archive item and evidence source:
+
+- `BOTH_OVERLAP_DIFFERENT_SPAN` rows become one `OVERLAP_DIFFERENT_SPAN` case per connected component. Two spans connect when their offsets overlap. One pilot span overlapping one official span is two review rows and one case. A larger component keeps every pilot span and every official span.
+- `PILOT_ONLY` and `OFFICIAL_ONLY` rows become one case per outer span.
+- `BOTH_SAME_SPAN` becomes one case. The case type is `SAME_SPAN_SURFACE_DIFFERENCE` when a name, title, or surface kind differs. It is `SAME_SPAN_KNOWN_NAME_ONLY` when the surfaces match and the official detectors are known-name without the semantic detector.
+- `OFFICIAL_SOURCE_NONCOMPARABLE` or `PILOT_SOURCE_NONCOMPARABLE` rows for one source become one `NONCOMPARABLE_SOURCE` case.
+- A pilot row whose category is `NON_COMPARABLE` becomes one `NONCOMPARABLE_PILOT_ROW` case.
+
+`summary.overlap_review_rows_collapsed` is the overlap review-row count minus the overlap case count. That is the number of extra directional rows absorbed into logical overlap cases.
+
+Diagnostics use the comparison's unique occurrence: archive item, evidence source, section, reason, offsets, surface, and segment id. Raw duplicate records stay counted in `raw_diagnostic_record_count` and are not repeated inside a case. A unique diagnostic attaches to the one case on the same source whose pilot or official span has the same offsets. If no span is exact and the diagnostic overlaps exactly one case, it attaches to that case. If it overlaps more than one case, it is not assigned to any of them and is not copied onto each of them. It becomes a standalone case. The comparison reason says that it overlaps multiple mention cases. The case type stays `SPLIT_CONFLICT` when the diagnostic reason is `SPLIT_CONFLICT`, and `DIAGNOSTIC_SUPPRESSION` otherwise. An exact match on more than one case is malformed review geometry. A diagnostic with no overlapping case uses the same standalone types, and its comparison reason says that no mention case corresponds. A pilot-only span that also has a split-conflict diagnostic stays `PILOT_ONLY`; the diagnostic is evidence on that case. Known-name support is metadata. It does not set a decision. Attachment does not depend on case order.
+
+Every case has `review_status` `PENDING`, `decision` null, and `reviewer_note` null. The allowed later decisions are `OFFICIAL_PREFERRED`, `PILOT_PREFERRED`, `BOTH_ACCEPTABLE`, `BOTH_WRONG`, `NOT_A_PERSON`, and `NEEDS_RESEARCH`. The packet schema refuses any other decision value. Case ids are `C0001` upward after a deterministic sort. Duplicate case geometry, found before case ids are assigned, is `MALFORMED_ARTIFACT` with the reason `duplicate case geometry`. A duplicate case id is the same error code with the reason `duplicate case id`. Ordered offsets that run backwards are the same error code.
+
+The Markdown report is not a versioned artifact. It has one section per case and shows exact source strings, including newlines and pipes, inside fenced blocks. Existing output, report, and decision paths are refused.
+
+## mention-adjudication-decisions-v1
+
+File: `src/vs_archive_people/schemas/mention_adjudication_decisions.v1.json`.
+
+Optional output of `package-mention-adjudication --decisions`. This file is not a generated artifact. It has no producer stamp and no logical hash. It is editable. It is valid for downstream use only when `require_mention_adjudication_decisions(packet, decisions, adjudication_file_sha256=...)` accepts it against the exact adjudication packet. JSON Schema does not replace that check. A manually edited file can stay schema-valid while naming the wrong cases.
+
+The check verifies the packet as `mention-adjudication-v1` and the decision file as `mention-adjudication-decisions-v1`. It requires `adjudication_schema_version` to be `mention-adjudication-v1`, `adjudication_logical_sha256` to equal the packet logical hash, and `adjudication_file_sha256` to equal the packet file hash supplied by the caller. A hash mismatch is `INPUT_HASH_CHANGED`. It requires every packet `case_id` exactly once. A duplicate decision case id, an unknown case id, or a missing case id is `MALFORMED_ARTIFACT`. Row order is not meaningful: the same case-id set in another order is valid. `decision` may stay null or be one of `OFFICIAL_PREFERRED`, `PILOT_PREFERRED`, `BOTH_ACCEPTABLE`, `BOTH_WRONG`, `NOT_A_PERSON`, and `NEEDS_RESEARCH`. `reviewer_note` may stay null or be a string. The check does not modify the packet.
+
+The generated template has one row per packet case, `decision` null, and `reviewer_note` null. A person may later fill those two fields. That edit does not change the adjudication packet. It does not tune a detector, change a prompt, change split rules, retire the pilot or v1, create a Person or an alias, merge identities, or authorize apply. No command in this phase reads the filled file to change detection.
+
 ## evidence-package-v1
 
 File: `src/vs_archive_people/schemas/evidence_package.v1.json`.

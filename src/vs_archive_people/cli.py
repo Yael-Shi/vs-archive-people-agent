@@ -15,8 +15,10 @@ mention-proposals-v1 from human geometry. ``find-mentions`` publishes the same
 artifact from automated detection, plus a diagnostic sidecar.
 ``pilot-find-mentions`` is experimental. ``compare-mention-runs`` compares
 stored pilot output with ``mention-proposals-v1``. It is evaluation only.
-None of those commands is a pipeline step. Each output path is published
-atomically and is refused when it already exists.
+``package-mention-adjudication`` reads ``mention-run-comparison-v3`` and
+publishes a pending ``mention-adjudication-v1`` packet. It does not decide
+a case. None of those commands is a pipeline step. Each output path is
+published atomically and is refused when it already exists.
 """
 
 from __future__ import annotations
@@ -48,6 +50,13 @@ from vs_archive_people.artifacts.provenance import (
     verify_generated_artifact,
 )
 from vs_archive_people.discovery.select import select_items
+from vs_archive_people.evaluation.adjudicate import (
+    build_mention_adjudication,
+    build_mention_adjudication_decisions,
+)
+from vs_archive_people.evaluation.adjudication_report import (
+    render_adjudication_report,
+)
 from vs_archive_people.evaluation.compare import build_mention_run_comparison
 from vs_archive_people.evaluation.report import render_comparison_report
 from vs_archive_people.evidence.package import build_evidence_package
@@ -548,6 +557,43 @@ def command_compare_mention_runs(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_package_mention_adjudication(args: argparse.Namespace) -> int:
+    """Package comparison rows into pending cases. Does not decide or tune."""
+    destinations = [args.output, args.report]
+    if args.decisions is not None:
+        destinations.append(args.decisions)
+    for path in destinations:
+        if path.exists():
+            raise ArtifactExistsError(
+                f"refusing to overwrite existing artifact: {path}"
+            )
+    packet = build_mention_adjudication(
+        read_json(args.comparison),
+        comparison_file_sha256=sha256_file(args.comparison),
+    )
+    digest = write_json_atomic(args.output, packet)
+    _write_text_once(args.report, render_adjudication_report(packet))
+    decisions_path = None
+    if args.decisions is not None:
+        decisions = build_mention_adjudication_decisions(
+            packet,
+            adjudication_file_sha256=digest,
+        )
+        write_json_atomic(args.decisions, decisions)
+        decisions_path = str(args.decisions)
+    _ok(
+        {
+            "output_sha256": digest,
+            "logical_content_sha256": packet["logical_content_sha256"],
+            "schema_version": packet["schema_version"],
+            "logical_case_count": packet["summary"]["logical_case_count"],
+            "report": str(args.report),
+            "decisions": decisions_path,
+        }
+    )
+    return 0
+
+
 def command_checkpoint(args: argparse.Namespace) -> int:
     """Record the next v1 checkpoint. Does not approve or apply identity."""
     return _command_checkpoint(args, RUN_CHECKPOINT_SCHEMA)
@@ -709,6 +755,19 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--output", type=Path, required=True)
     compare.add_argument("--report", type=Path, required=True)
     compare.set_defaults(func=command_compare_mention_runs)
+
+    adjudicate = commands.add_parser(
+        "package-mention-adjudication",
+        help=(
+            "Package mention-run-comparison-v3 into pending logical review cases. "
+            "Read-only. Not a pipeline step, not a provider call, and not a decision."
+        ),
+    )
+    adjudicate.add_argument("--comparison", type=Path, required=True)
+    adjudicate.add_argument("--output", type=Path, required=True)
+    adjudicate.add_argument("--report", type=Path, required=True)
+    adjudicate.add_argument("--decisions", type=Path)
+    adjudicate.set_defaults(func=command_package_mention_adjudication)
 
     _add_checkpoint_command(
         commands,

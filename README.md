@@ -151,6 +151,16 @@ python -m vs_archive_people.cli compare-mention-runs \
 
 `--diagnostics` and `--documents` may be omitted. Without diagnostics, diagnostic metrics are unavailable. Without the document snapshot that the proposal file is bound to, source equivalence stays unknown. The pilot result is not ground truth.
 
+`package-mention-adjudication` reads one `mention-run-comparison-v3` file and writes a pending `mention-adjudication-v1` packet plus a Markdown review. It does not call a provider, reopen snapshots, or decide a case. Overlap rows that describe one connected span disagreement become one case. A diagnostic attaches to the one matching case. If it overlaps more than one case, it stays a separate case and is not assigned. `--decisions` writes an empty `mention-adjudication-decisions-v1` file. That file is editable, and it is valid for later use only when `require_mention_adjudication_decisions` accepts it against that exact packet. Filling it does not tune the finder or authorize apply.
+
+```bash
+python -m vs_archive_people.cli package-mention-adjudication \
+  --comparison runs/mention-run-comparison-v3.json \
+  --output runs/mention-adjudication.json \
+  --report runs/mention-adjudication.md \
+  --decisions runs/mention-adjudication-decisions.json
+```
+
 Mention proposals for `freeze-evidence` are a JSON list, or an object with a `mentions` array. Each proposal needs `archive_item_id`, `evidence_source`, `start_offset`, `end_offset`, `exact_mention`, and `evidence_snippet`. Offsets are zero-based indexes into that displayed body, and the slice must equal `exact_mention`. Optional fields: `mention_class` (`PERSON` or `NOT_A_PERSON`), `propose_alias`, `proposed_identity_action` (`MERGE` or `CANONICAL_NAME_CHANGE`), and `confidence` (0–100). `mention_key`, `mention_fingerprint`, and `occurrence_index` are assigned when the evidence is frozen. A caller-supplied key, fingerprint, or occurrence index is discarded.
 
 ## Environment
